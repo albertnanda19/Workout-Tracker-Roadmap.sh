@@ -1,13 +1,30 @@
 package domain
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 type WorkoutPlan struct {
-	ID     int64
-	UserID int64
-	Title  string
+	ID        string
+	UserID    string
+	Name      string
+	Notes     string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+type WorkoutPlanExercise struct {
+	ExerciseID string
+	Sets       int
+	Reps       int
+	Weight     *float64
+	OrderIndex int
 }
 
 type WorkoutRepository interface {
-	Create(ctx context.Context, entity *WorkoutPlan) error
+	CreatePlan(ctx context.Context, plan *WorkoutPlan, exercises []WorkoutPlanExercise) error
+	GetPlansByUser(ctx context.Context, userID string) ([]WorkoutPlan, error)
+	GetPlanByID(ctx context.Context, id string, userID string) (*WorkoutPlan, error)
+	DeletePlan(ctx context.Context, id string, userID string) error
 }

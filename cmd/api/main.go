@@ -12,6 +12,7 @@ import (
 	httpdelivery "workout-tracker/internal/delivery/http"
 	"workout-tracker/internal/infrastructure"
 	"workout-tracker/internal/infrastructure/migration"
+	"workout-tracker/internal/infrastructure/repository"
 	"workout-tracker/internal/infrastructure/seeder"
 )
 
@@ -37,6 +38,11 @@ func main() {
 		log.Fatal(err)
 	}
 	log.Println("Seeding completed")
+
+	userRepo := repository.NewPostgresUserRepository(db)
+	workoutRepo := repository.NewPostgresWorkoutRepository(db)
+	exerciseRepo := repository.NewPostgresExerciseRepository(db)
+	_, _, _ = userRepo, workoutRepo, exerciseRepo
 
 	h := httpdelivery.NewRouter()
 

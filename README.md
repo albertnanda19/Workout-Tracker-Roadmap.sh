@@ -1,69 +1,95 @@
 # Workout Tracker API
 
-REST API for managing workout plans, schedules, and user authentication.
+## Project Reference
+
+This project is built as part of the roadmap.sh Backend Project:
+
+https://roadmap.sh/projects/fitness-workout-tracker
+
+## Overview
+
+Workout Tracker API is a REST API for managing workout plans, workout schedules, and user authentication.
+
+Main capabilities:
+
+- User Authentication (JWT)
+- Workout Plan CRUD
+- Scheduled Workouts
+- Pagination & Filtering
+- OpenAPI Documentation
+- Unit Testing
+- Observability (Logging + Error Handling)
+
+## Tech Stack
+
+- Go (Golang)
+- PostgreSQL
+- Clean Architecture
+- JWT Authentication
+- OpenAPI 3.0 Specification
+- Testify (Unit Testing)
+- slog (Structured Logging)
 
 ## Requirements
 
 - Go 1.22+
 - PostgreSQL
 
-## Configuration
+## Running the Project
 
-Create `.env` in project root:
+1. Clone repository
+
+2. Copy environment file
 
 ```
-PORT=8080
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=postgres
-DB_PASSWORD=password
-DB_NAME=workout_tracker
-DB_SSLMODE=disable
-JWT_SECRET=supersecretkey
+cp .env.example .env
 ```
 
-## Run
+3. Set environment variables in `.env` (PostgreSQL connection and JWT secret)
+
+4. Run the API server
 
 ```
 go run cmd/api/main.go
 ```
 
-## Test
+## Running Tests
 
 ```
 go test ./...
+go test ./... -cover
 ```
 
-## API Documentation (OpenAPI)
+## API Documentation
 
-OpenAPI spec file:
+OpenAPI specification is available at:
 
 - `docs/openapi.yaml`
 
-### View Documentation
+To view the documentation:
 
-- Open https://editor.swagger.io
-- Upload atau paste isi `docs/openapi.yaml`
+1. Open https://editor.swagger.io
+2. Upload or paste the contents of `docs/openapi.yaml`
 
-## Curl Examples
+## Example Usage
 
-### Register
+### 1) Register
 
 ```
 curl -X POST http://localhost:8080/auth/register \
   -H "Content-Type: application/json" \
-  -d '{"name":"John Doe","email":"user@example.com","password":"password123"}'
+  -d '{"name":"John Doe","email":"user@example.com","password":"your-password"}'
 ```
 
-### Login
+### 2) Login
 
 ```
 curl -X POST http://localhost:8080/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"user@example.com","password":"password123"}'
+  -d '{"email":"user@example.com","password":"your-password"}'
 ```
 
-### Create Workout Plan
+### 3) Create Workout
 
 ```
 curl -X POST http://localhost:8080/api/workouts \
@@ -78,14 +104,14 @@ curl -X POST http://localhost:8080/api/workouts \
   }'
 ```
 
-### List Workouts (Pagination + Filter)
+### 4) List Workouts
 
 ```
 curl -X GET "http://localhost:8080/api/workouts?page=1&limit=10&name=push" \
   -H "Authorization: Bearer <TOKEN>"
 ```
 
-### Schedule Workout
+### 5) Schedule Workout
 
 ```
 curl -X POST http://localhost:8080/api/workouts/schedule \
@@ -93,3 +119,32 @@ curl -X POST http://localhost:8080/api/workouts/schedule \
   -H "Authorization: Bearer <TOKEN>" \
   -d '{"workout_plan_id":"22222222-2222-2222-2222-222222222222","scheduled_date":"2026-02-20"}'
 ```
+
+## Project Structure
+
+```
+cmd/
+internal/
+  domain/
+  repository/
+  usecase/
+  delivery/
+docs/
+```
+
+- **cmd/**
+  Application entrypoints.
+- **internal/domain/**
+  Core business entities, errors, and shared types (e.g., pagination).
+- **internal/repository/**
+  Repository interfaces and contracts used by the use cases.
+- **internal/usecase/**
+  Application business logic and orchestration.
+- **internal/delivery/**
+  HTTP delivery layer (handlers, middleware, request/response DTO).
+- **docs/**
+  OpenAPI specification (`openapi.yaml`).
+
+## License
+
+This project is for educational purposes as part of roadmap.sh backend projects.

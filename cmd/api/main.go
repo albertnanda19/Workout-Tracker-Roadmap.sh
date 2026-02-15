@@ -48,7 +48,8 @@ func main() {
 	jwtSvc := auth.NewJWTService(cfg.JWTSecret)
 	userUC := usecase.NewUserUsecase(userRepo, jwtSvc)
 	workoutUC := usecase.NewWorkoutUsecase(workoutRepo)
-	handler := httpdelivery.NewHandler(userUC, workoutUC)
+	exerciseUC := usecase.NewExerciseUsecase(exerciseRepo)
+	handler := httpdelivery.NewHandler(userUC, workoutUC, exerciseUC)
 	router := httpdelivery.NewRouter(handler, jwtSvc)
 	_, _, _ = exerciseRepo, workoutUC, router
 

@@ -39,12 +39,13 @@ type CreateWorkoutExerciseInput struct {
 }
 
 type Handler struct {
-	userUsecase    *usecase.UserUsecase
-	workoutUsecase *usecase.WorkoutUsecase
+	userUsecase     *usecase.UserUsecase
+	workoutUsecase  *usecase.WorkoutUsecase
+	exerciseUsecase *usecase.ExerciseUsecase
 }
 
-func NewHandler(userUC *usecase.UserUsecase, workoutUC *usecase.WorkoutUsecase) *Handler {
-	return &Handler{userUsecase: userUC, workoutUsecase: workoutUC}
+func NewHandler(userUC *usecase.UserUsecase, workoutUC *usecase.WorkoutUsecase, exerciseUC *usecase.ExerciseUsecase) *Handler {
+	return &Handler{userUsecase: userUC, workoutUsecase: workoutUC, exerciseUsecase: exerciseUC}
 }
 
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
@@ -293,4 +294,19 @@ func (h *Handler) DeleteWorkout(w http.ResponseWriter, r *http.Request, userID s
 	}
 
 	response.JSON(w, http.StatusOK, map[string]string{"message": "workout deleted"})
+}
+
+func (h *Handler) Exercises(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		response.JSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+
+	exercises, err := h.exerciseUsecase.GetAll(r.Context())
+	if err != nil {
+		response.JSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to list exercises"})
+		return
+	}
+
+	response.JSON(w, http.StatusOK, exercises)
 }

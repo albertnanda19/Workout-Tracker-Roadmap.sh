@@ -11,6 +11,8 @@ import (
 
 	httpdelivery "workout-tracker/internal/delivery/http"
 	"workout-tracker/internal/infrastructure"
+	"workout-tracker/internal/infrastructure/migration"
+	"workout-tracker/internal/infrastructure/seeder"
 )
 
 func main() {
@@ -19,11 +21,22 @@ func main() {
 		log.Fatal(err)
 	}
 
-	db, err := infrastructure.NewPostgresDB(cfg.DatabaseURL)
+	db, err := infrastructure.NewPostgresDB(&cfg)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer db.Close()
+	log.Println("Database connected")
+
+	if err := migration.RunMigrations(db); err != nil {
+		log.Fatal(err)
+	}
+	log.Println("Migration completed")
+
+	if err := seeder.RunSeeders(db); err != nil {
+		log.Fatal(err)
+	}
+	log.Println("Seeding completed")
 
 	h := httpdelivery.NewRouter()
 
@@ -34,7 +47,7 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("HTTP server listening on %s", srv.Addr)
+		log.Printf("Server running on port %s", cfg.Port)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatal(err)
 		}

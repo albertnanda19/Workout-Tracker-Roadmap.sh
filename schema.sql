@@ -21,6 +21,8 @@ CREATE TABLE IF NOT EXISTS exercises (
   created_at TIMESTAMP NOT NULL DEFAULT now()
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS exercises_name_unique ON exercises(name);
+
 CREATE TABLE IF NOT EXISTS workout_plans (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL,

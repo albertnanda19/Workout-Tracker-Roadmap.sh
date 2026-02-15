@@ -2,15 +2,20 @@ package infrastructure
 
 import (
 	"database/sql"
+	"time"
 
-	_ "github.com/jackc/pgx/v5/stdlib"
+	_ "github.com/lib/pq"
 )
 
-func NewPostgresDB(dsn string) (*sql.DB, error) {
-	db, err := sql.Open("pgx", dsn)
+func NewPostgresDB(cfg *Config) (*sql.DB, error) {
+	db, err := sql.Open("postgres", cfg.DSN())
 	if err != nil {
 		return nil, err
 	}
+
+	db.SetMaxOpenConns(10)
+	db.SetMaxIdleConns(5)
+	db.SetConnMaxLifetime(30 * time.Minute)
 
 	if err := db.Ping(); err != nil {
 		_ = db.Close()

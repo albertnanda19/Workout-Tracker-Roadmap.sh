@@ -1,0 +1,29 @@
+# Binaries
+/workout-tracker
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, coverage, profiling
+*.test
+*.out
+*.prof
+coverage*
+
+# Logs
+*.log
+
+# Go workspace
+/vendor/
+
+# Env
+.env
+
+# OS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/

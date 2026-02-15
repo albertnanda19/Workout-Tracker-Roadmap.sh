@@ -83,7 +83,8 @@ func TestScheduledWorkoutUsecase_ScheduleWorkout(t *testing.T) {
 			}
 
 			if tt.expectedErr == nil || errors.Is(tt.expectedErr, domain.ErrConflict) {
-				repo.On("GetByUserAndDate", mock.Anything, "u1", mock.Anything).Return(tt.existing, tt.existingErr)
+				repo.On("GetByUser", mock.Anything, "u1", mock.Anything, mock.Anything).
+					Return(domain.NewPaginatedResult(tt.existing, len(tt.existing), domain.NewPagination(1, 100)), tt.existingErr)
 			}
 
 			if tt.expectedErr == nil || tt.createErr != nil {

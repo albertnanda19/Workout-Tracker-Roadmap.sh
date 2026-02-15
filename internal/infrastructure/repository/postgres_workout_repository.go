@@ -117,17 +117,33 @@ func (r *PostgresWorkoutRepository) UpdatePlan(ctx context.Context, plan *domain
 	return nil
 }
 
-func (r *PostgresWorkoutRepository) GetPlansByUser(ctx context.Context, userID string) ([]domain.WorkoutPlan, error) {
+func (r *PostgresWorkoutRepository) GetPlansByUser(ctx context.Context, userID string, pagination domain.Pagination, filters domain.WorkoutPlanFilter) (domain.PaginatedResult[domain.WorkoutPlan], error) {
+	offset := (pagination.Page - 1) * pagination.Limit
+
+	const countQ = `
+		SELECT COUNT(1)
+		FROM workout_plans
+		WHERE user_id = $1
+		AND ($2 = '' OR name ILIKE '%' || $2 || '%')
+	`
+
+	var total int
+	if err := r.db.QueryRowContext(ctx, countQ, userID, filters.Name).Scan(&total); err != nil {
+		return domain.PaginatedResult[domain.WorkoutPlan]{}, fmt.Errorf("get plans by user: %w", err)
+	}
+
 	const q = `
 		SELECT id, user_id, name, notes, created_at, updated_at
 		FROM workout_plans
 		WHERE user_id = $1
+		AND ($2 = '' OR name ILIKE '%' || $2 || '%')
 		ORDER BY created_at DESC
+		LIMIT $3 OFFSET $4
 	`
 
-	rows, err := r.db.QueryContext(ctx, q, userID)
+	rows, err := r.db.QueryContext(ctx, q, userID, filters.Name, pagination.Limit, offset)
 	if err != nil {
-		return nil, fmt.Errorf("get plans by user: %w", err)
+		return domain.PaginatedResult[domain.WorkoutPlan]{}, fmt.Errorf("get plans by user: %w", err)
 	}
 	defer rows.Close()
 
@@ -135,15 +151,15 @@ func (r *PostgresWorkoutRepository) GetPlansByUser(ctx context.Context, userID s
 	for rows.Next() {
 		var p domain.WorkoutPlan
 		if err := rows.Scan(&p.ID, &p.UserID, &p.Name, &p.Notes, &p.CreatedAt, &p.UpdatedAt); err != nil {
-			return nil, fmt.Errorf("get plans by user: %w", err)
+			return domain.PaginatedResult[domain.WorkoutPlan]{}, fmt.Errorf("get plans by user: %w", err)
 		}
 		out = append(out, p)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("get plans by user: %w", err)
+		return domain.PaginatedResult[domain.WorkoutPlan]{}, fmt.Errorf("get plans by user: %w", err)
 	}
 
-	return out, nil
+	return domain.NewPaginatedResult(out, total, pagination), nil
 }
 
 func (r *PostgresWorkoutRepository) GetPlanByID(ctx context.Context, id string, userID string) (*domain.WorkoutPlan, error) {

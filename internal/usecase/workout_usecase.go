@@ -121,17 +121,17 @@ func (u *WorkoutUsecase) UpdatePlan(
 	return nil
 }
 
-func (u *WorkoutUsecase) GetPlans(ctx context.Context, userID string) ([]domain.WorkoutPlan, error) {
+func (u *WorkoutUsecase) GetPlans(ctx context.Context, userID string, pagination domain.Pagination, filters domain.WorkoutPlanFilter) (domain.PaginatedResult[domain.WorkoutPlan], error) {
 	userID = strings.TrimSpace(userID)
 	if userID == "" {
-		return nil, fmt.Errorf("get plans: %w", domain.ErrInvalidInput)
+		return domain.PaginatedResult[domain.WorkoutPlan]{}, fmt.Errorf("get plans: %w", domain.ErrInvalidInput)
 	}
 
-	plans, err := u.repo.GetPlansByUser(ctx, userID)
+	res, err := u.repo.GetPlansByUser(ctx, userID, pagination, filters)
 	if err != nil {
-		return nil, fmt.Errorf("get plans: %w", err)
+		return domain.PaginatedResult[domain.WorkoutPlan]{}, fmt.Errorf("get plans: %w", err)
 	}
-	return plans, nil
+	return res, nil
 }
 
 func (u *WorkoutUsecase) GetPlanByID(ctx context.Context, userID string, planID string) (*domain.WorkoutPlan, error) {

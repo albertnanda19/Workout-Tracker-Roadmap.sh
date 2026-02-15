@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"time"
 
 	"workout-tracker/internal/domain"
 	irepo "workout-tracker/internal/repository"
@@ -40,46 +39,38 @@ func (r *PostgresScheduledWorkoutRepository) Create(ctx context.Context, sw *dom
 	return nil
 }
 
-func (r *PostgresScheduledWorkoutRepository) GetByUserAndDate(ctx context.Context, userID string, date time.Time) ([]domain.ScheduledWorkout, error) {
-	const q = `
-		SELECT id, user_id, workout_plan_id, scheduled_date, created_at
+func (r *PostgresScheduledWorkoutRepository) GetByUser(ctx context.Context, userID string, pagination domain.Pagination, filters domain.ScheduledWorkoutFilter) (domain.PaginatedResult[domain.ScheduledWorkout], error) {
+	offset := (pagination.Page - 1) * pagination.Limit
+
+	var date interface{} = nil
+	if filters.Date != nil {
+		date = *filters.Date
+	}
+
+	const countQ = `
+		SELECT COUNT(1)
 		FROM scheduled_workouts
-		WHERE user_id = $1 AND scheduled_date = $2
-		ORDER BY created_at ASC
+		WHERE user_id = $1
+		AND ($2::date IS NULL OR scheduled_date = $2)
 	`
 
-	rows, err := r.db.QueryContext(ctx, q, userID, date)
-	if err != nil {
-		return nil, fmt.Errorf("get schedules by user and date: %w", err)
-	}
-	defer rows.Close()
-
-	out := make([]domain.ScheduledWorkout, 0)
-	for rows.Next() {
-		var sw domain.ScheduledWorkout
-		if err := rows.Scan(&sw.ID, &sw.UserID, &sw.WorkoutPlanID, &sw.ScheduledDate, &sw.CreatedAt); err != nil {
-			return nil, fmt.Errorf("get schedules by user and date: %w", err)
-		}
-		out = append(out, sw)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("get schedules by user and date: %w", err)
+	var total int
+	if err := r.db.QueryRowContext(ctx, countQ, userID, date).Scan(&total); err != nil {
+		return domain.PaginatedResult[domain.ScheduledWorkout]{}, fmt.Errorf("get schedules by user: %w", err)
 	}
 
-	return out, nil
-}
-
-func (r *PostgresScheduledWorkoutRepository) GetByUser(ctx context.Context, userID string) ([]domain.ScheduledWorkout, error) {
 	const q = `
 		SELECT id, user_id, workout_plan_id, scheduled_date, created_at
 		FROM scheduled_workouts
 		WHERE user_id = $1
-		ORDER BY scheduled_date ASC, created_at ASC
+		AND ($2::date IS NULL OR scheduled_date = $2)
+		ORDER BY scheduled_date DESC, created_at DESC
+		LIMIT $3 OFFSET $4
 	`
 
-	rows, err := r.db.QueryContext(ctx, q, userID)
+	rows, err := r.db.QueryContext(ctx, q, userID, date, pagination.Limit, offset)
 	if err != nil {
-		return nil, fmt.Errorf("get schedules by user: %w", err)
+		return domain.PaginatedResult[domain.ScheduledWorkout]{}, fmt.Errorf("get schedules by user: %w", err)
 	}
 	defer rows.Close()
 
@@ -87,15 +78,15 @@ func (r *PostgresScheduledWorkoutRepository) GetByUser(ctx context.Context, user
 	for rows.Next() {
 		var sw domain.ScheduledWorkout
 		if err := rows.Scan(&sw.ID, &sw.UserID, &sw.WorkoutPlanID, &sw.ScheduledDate, &sw.CreatedAt); err != nil {
-			return nil, fmt.Errorf("get schedules by user: %w", err)
+			return domain.PaginatedResult[domain.ScheduledWorkout]{}, fmt.Errorf("get schedules by user: %w", err)
 		}
 		out = append(out, sw)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("get schedules by user: %w", err)
+		return domain.PaginatedResult[domain.ScheduledWorkout]{}, fmt.Errorf("get schedules by user: %w", err)
 	}
 
-	return out, nil
+	return domain.NewPaginatedResult(out, total, pagination), nil
 }
 
 func (r *PostgresScheduledWorkoutRepository) Delete(ctx context.Context, id string, userID string) error {

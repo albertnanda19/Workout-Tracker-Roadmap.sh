@@ -2,7 +2,6 @@ package mocks
 
 import (
 	"context"
-	"time"
 
 	"github.com/stretchr/testify/mock"
 
@@ -18,20 +17,12 @@ func (m *MockScheduledWorkoutRepository) Create(ctx context.Context, sw *domain.
 	return args.Error(0)
 }
 
-func (m *MockScheduledWorkoutRepository) GetByUserAndDate(ctx context.Context, userID string, date time.Time) ([]domain.ScheduledWorkout, error) {
-	args := m.Called(ctx, userID, date)
+func (m *MockScheduledWorkoutRepository) GetByUser(ctx context.Context, userID string, pagination domain.Pagination, filters domain.ScheduledWorkoutFilter) (domain.PaginatedResult[domain.ScheduledWorkout], error) {
+	args := m.Called(ctx, userID, pagination, filters)
 	if args.Get(0) == nil {
-		return nil, args.Error(1)
+		return domain.PaginatedResult[domain.ScheduledWorkout]{}, args.Error(1)
 	}
-	return args.Get(0).([]domain.ScheduledWorkout), args.Error(1)
-}
-
-func (m *MockScheduledWorkoutRepository) GetByUser(ctx context.Context, userID string) ([]domain.ScheduledWorkout, error) {
-	args := m.Called(ctx, userID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]domain.ScheduledWorkout), args.Error(1)
+	return args.Get(0).(domain.PaginatedResult[domain.ScheduledWorkout]), args.Error(1)
 }
 
 func (m *MockScheduledWorkoutRepository) Delete(ctx context.Context, id string, userID string) error {

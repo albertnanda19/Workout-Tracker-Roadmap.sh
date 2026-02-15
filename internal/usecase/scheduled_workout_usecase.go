@@ -46,11 +46,11 @@ func (u *ScheduledWorkoutUsecase) ScheduleWorkout(ctx context.Context, userID, w
 		return fmt.Errorf("schedule workout: %w", domain.ErrForbidden)
 	}
 
-	existing, err := u.repo.GetByUserAndDate(ctx, userID, date)
+	res, err := u.repo.GetByUser(ctx, userID, domain.NewPagination(1, 100), domain.ScheduledWorkoutFilter{Date: &date})
 	if err != nil {
 		return fmt.Errorf("schedule workout: %w", err)
 	}
-	for _, sw := range existing {
+	for _, sw := range res.Data {
 		if sw.WorkoutPlanID == workoutPlanID {
 			return fmt.Errorf("schedule workout: %w", domain.ErrConflict)
 		}
@@ -72,29 +72,16 @@ func (u *ScheduledWorkoutUsecase) ScheduleWorkout(ctx context.Context, userID, w
 	return nil
 }
 
-func (u *ScheduledWorkoutUsecase) GetUserScheduleByDate(ctx context.Context, userID string, date time.Time) ([]domain.ScheduledWorkout, error) {
+func (u *ScheduledWorkoutUsecase) GetSchedules(ctx context.Context, userID string, pagination domain.Pagination, filters domain.ScheduledWorkoutFilter) (domain.PaginatedResult[domain.ScheduledWorkout], error) {
 	if userID == "" {
-		return nil, fmt.Errorf("get schedules: %w", domain.ErrInvalidInput)
+		return domain.PaginatedResult[domain.ScheduledWorkout]{}, fmt.Errorf("get schedules: %w", domain.ErrInvalidInput)
 	}
 
-	d := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC)
-	items, err := u.repo.GetByUserAndDate(ctx, userID, d)
+	res, err := u.repo.GetByUser(ctx, userID, pagination, filters)
 	if err != nil {
-		return nil, fmt.Errorf("get schedules: %w", err)
+		return domain.PaginatedResult[domain.ScheduledWorkout]{}, fmt.Errorf("get schedules: %w", err)
 	}
-	return items, nil
-}
-
-func (u *ScheduledWorkoutUsecase) GetAllUserSchedules(ctx context.Context, userID string) ([]domain.ScheduledWorkout, error) {
-	if userID == "" {
-		return nil, fmt.Errorf("get schedules: %w", domain.ErrInvalidInput)
-	}
-
-	items, err := u.repo.GetByUser(ctx, userID)
-	if err != nil {
-		return nil, fmt.Errorf("get schedules: %w", err)
-	}
-	return items, nil
+	return res, nil
 }
 
 func (u *ScheduledWorkoutUsecase) DeleteSchedule(ctx context.Context, id, userID string) error {

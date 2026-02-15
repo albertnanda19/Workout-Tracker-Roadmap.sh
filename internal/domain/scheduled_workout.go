@@ -9,3 +9,7 @@ type ScheduledWorkout struct {
 	ScheduledDate time.Time
 	CreatedAt     time.Time
 }
+
+type ScheduledWorkoutFilter struct {
+	Date *time.Time
+}

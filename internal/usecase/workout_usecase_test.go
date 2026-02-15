@@ -209,18 +209,18 @@ func TestWorkoutUsecase_GetPlans(t *testing.T) {
 	repo := new(mocks.MockWorkoutRepository)
 	uc := usecase.NewWorkoutUsecase(repo)
 
-	expected := []domain.WorkoutPlan{{ID: "p1"}}
-	repo.On("GetPlansByUser", mock.Anything, "u1").Return(expected, nil).Once()
+	expected := domain.NewPaginatedResult([]domain.WorkoutPlan{{ID: "p1"}}, 1, domain.NewPagination(1, 10))
+	repo.On("GetPlansByUser", mock.Anything, "u1", mock.Anything, mock.Anything).Return(expected, nil).Once()
 
-	plans, err := uc.GetPlans(context.Background(), "u1")
+	plans, err := uc.GetPlans(context.Background(), "u1", domain.NewPagination(1, 10), domain.WorkoutPlanFilter{})
 	require.NoError(t, err)
-	assert.Len(t, plans, 1)
+	assert.Len(t, plans.Data, 1)
 	repo.AssertExpectations(t)
 
 	repo2 := new(mocks.MockWorkoutRepository)
 	uc2 := usecase.NewWorkoutUsecase(repo2)
-	repo2.On("GetPlansByUser", mock.Anything, "u1").Return(nil, errors.New("db"))
+	repo2.On("GetPlansByUser", mock.Anything, "u1", mock.Anything, mock.Anything).Return(nil, errors.New("db"))
 
-	_, err = uc2.GetPlans(context.Background(), "u1")
+	_, err = uc2.GetPlans(context.Background(), "u1", domain.NewPagination(1, 10), domain.WorkoutPlanFilter{})
 	require.Error(t, err)
 }

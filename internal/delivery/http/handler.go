@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -268,13 +269,58 @@ func (h *Handler) CreateWorkout(w http.ResponseWriter, r *http.Request, userID s
 }
 
 func (h *Handler) ListWorkouts(w http.ResponseWriter, r *http.Request, userID string) {
-	plans, err := h.workoutUsecase.GetPlans(r.Context(), userID)
+	pageStr := r.URL.Query().Get("page")
+	limitStr := r.URL.Query().Get("limit")
+
+	page := 0
+	limit := 0
+	if pageStr != "" {
+		v, err := strconv.Atoi(pageStr)
+		if err != nil {
+			httperr.WriteError(w, r, h.logger, domain.ErrInvalidInput)
+			return
+		}
+		page = v
+	}
+	if limitStr != "" {
+		v, err := strconv.Atoi(limitStr)
+		if err != nil {
+			httperr.WriteError(w, r, h.logger, domain.ErrInvalidInput)
+			return
+		}
+		limit = v
+	}
+	name := strings.TrimSpace(r.URL.Query().Get("name"))
+
+	if r.URL.Query().Has("page") {
+		if page < 1 {
+			httperr.WriteError(w, r, h.logger, domain.ErrInvalidInput)
+			return
+		}
+	}
+	if r.URL.Query().Has("limit") {
+		if limit < 1 {
+			httperr.WriteError(w, r, h.logger, domain.ErrInvalidInput)
+			return
+		}
+	}
+
+	p := domain.NewPagination(page, limit)
+	res, err := h.workoutUsecase.GetPlans(r.Context(), userID, p, domain.WorkoutPlanFilter{Name: name})
 	if err != nil {
 		httperr.WriteError(w, r, h.logger, err)
 		return
 	}
 
-	response.JSON(w, http.StatusOK, plans)
+	data := make([]httperr.WorkoutPlanDTO, 0, len(res.Data))
+	for _, p := range res.Data {
+		data = append(data, httperr.ToWorkoutPlanDTO(p))
+	}
+
+	response.JSON(w, http.StatusOK, httperr.PaginatedResponse[httperr.WorkoutPlanDTO]{
+		Data: data,
+		Meta: httperr.PaginationMeta{Total: res.Total, Page: res.Page, Limit: res.Limit, TotalPages: res.TotalPages},
+	})
 }
 
 func (h *Handler) GetWorkoutByID(w http.ResponseWriter, r *http.Request, userID string, planID string) {
@@ -404,29 +450,68 @@ func (h *Handler) ScheduledWorkouts(w http.ResponseWriter, r *http.Request) {
 		return
 
 	case http.MethodGet:
+		pageStr := r.URL.Query().Get("page")
+		limitStr := r.URL.Query().Get("limit")
+		page := 0
+		limit := 0
+		if pageStr != "" {
+			v, err := strconv.Atoi(pageStr)
+			if err != nil {
+				httperr.WriteError(w, r, h.logger, domain.ErrInvalidInput)
+				return
+			}
+			page = v
+		}
+		if limitStr != "" {
+			v, err := strconv.Atoi(limitStr)
+			if err != nil {
+				httperr.WriteError(w, r, h.logger, domain.ErrInvalidInput)
+				return
+			}
+			limit = v
+		}
 		dateParam := strings.TrimSpace(r.URL.Query().Get("date"))
+
+		if r.URL.Query().Has("page") {
+			if page < 1 {
+				httperr.WriteError(w, r, h.logger, domain.ErrInvalidInput)
+				return
+			}
+		}
+		if r.URL.Query().Has("limit") {
+			if limit < 1 {
+				httperr.WriteError(w, r, h.logger, domain.ErrInvalidInput)
+				return
+			}
+		}
+
+		p := domain.NewPagination(page, limit)
+		var filter domain.ScheduledWorkoutFilter
 		if dateParam != "" {
 			d, err := time.Parse("2006-01-02", dateParam)
 			if err != nil {
 				httperr.WriteError(w, r, h.logger, domain.ErrInvalidInput)
 				return
 			}
-
-			items, err := h.scheduledWorkoutUsecase.GetUserScheduleByDate(r.Context(), userID, d)
-			if err != nil {
-				httperr.WriteError(w, r, h.logger, err)
-				return
-			}
-			response.JSON(w, http.StatusOK, items)
-			return
+			d = time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, time.UTC)
+			filter.Date = &d
 		}
 
-		items, err := h.scheduledWorkoutUsecase.GetAllUserSchedules(r.Context(), userID)
+		res, err := h.scheduledWorkoutUsecase.GetSchedules(r.Context(), userID, p, filter)
 		if err != nil {
 			httperr.WriteError(w, r, h.logger, err)
 			return
 		}
-		response.JSON(w, http.StatusOK, items)
+
+		data := make([]httperr.ScheduledWorkoutDTO, 0, len(res.Data))
+		for _, sw := range res.Data {
+			data = append(data, httperr.ToScheduledWorkoutDTO(sw))
+		}
+
+		response.JSON(w, http.StatusOK, httperr.PaginatedResponse[httperr.ScheduledWorkoutDTO]{
+			Data: data,
+			Meta: httperr.PaginationMeta{Total: res.Total, Page: res.Page, Limit: res.Limit, TotalPages: res.TotalPages},
+		})
 		return
 	default:
 		response.JSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})

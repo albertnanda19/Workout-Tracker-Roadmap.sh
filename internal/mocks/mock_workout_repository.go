@@ -22,12 +22,12 @@ func (m *MockWorkoutRepository) UpdatePlan(ctx context.Context, plan *domain.Wor
 	return args.Error(0)
 }
 
-func (m *MockWorkoutRepository) GetPlansByUser(ctx context.Context, userID string) ([]domain.WorkoutPlan, error) {
-	args := m.Called(ctx, userID)
+func (m *MockWorkoutRepository) GetPlansByUser(ctx context.Context, userID string, pagination domain.Pagination, filters domain.WorkoutPlanFilter) (domain.PaginatedResult[domain.WorkoutPlan], error) {
+	args := m.Called(ctx, userID, pagination, filters)
 	if args.Get(0) == nil {
-		return nil, args.Error(1)
+		return domain.PaginatedResult[domain.WorkoutPlan]{}, args.Error(1)
 	}
-	return args.Get(0).([]domain.WorkoutPlan), args.Error(1)
+	return args.Get(0).(domain.PaginatedResult[domain.WorkoutPlan]), args.Error(1)
 }
 
 func (m *MockWorkoutRepository) GetPlanByID(ctx context.Context, id string, userID string) (*domain.WorkoutPlan, error) {

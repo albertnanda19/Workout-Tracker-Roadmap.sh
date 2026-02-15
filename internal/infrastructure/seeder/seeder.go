@@ -3,6 +3,7 @@ package seeder
 import (
 	"database/sql"
 	"errors"
+	"time"
 )
 
 type exerciseSeed struct {
@@ -65,6 +66,52 @@ func RunSeeders(db *sql.DB) error {
 	}
 
 	if err := tx.Commit(); err != nil {
+		return err
+	}
+
+	if err := seedScheduledWorkout(db); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func seedScheduledWorkout(db *sql.DB) error {
+	var userID string
+	if err := db.QueryRow(`
+		SELECT id
+		FROM users
+		ORDER BY created_at ASC
+		LIMIT 1
+	`).Scan(&userID); err != nil {
+		if err == sql.ErrNoRows {
+			return nil
+		}
+		return err
+	}
+
+	var planID string
+	if err := db.QueryRow(`
+		SELECT id
+		FROM workout_plans
+		WHERE user_id = $1
+		ORDER BY created_at ASC
+		LIMIT 1
+	`, userID).Scan(&planID); err != nil {
+		if err == sql.ErrNoRows {
+			return nil
+		}
+		return err
+	}
+
+	date := time.Now().UTC().Add(24 * time.Hour)
+	date = time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC)
+
+	if _, err := db.Exec(`
+		INSERT INTO scheduled_workouts (user_id, workout_plan_id, scheduled_date)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (user_id, workout_plan_id, scheduled_date) DO NOTHING
+	`, userID, planID, date); err != nil {
 		return err
 	}
 

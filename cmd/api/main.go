@@ -44,12 +44,14 @@ func main() {
 	userRepo := repository.NewPostgresUserRepository(db)
 	workoutRepo := repository.NewPostgresWorkoutRepository(db)
 	exerciseRepo := repository.NewPostgresExerciseRepository(db)
+	scheduledRepo := repository.NewPostgresScheduledWorkoutRepository(db)
 
 	jwtSvc := auth.NewJWTService(cfg.JWTSecret)
 	userUC := usecase.NewUserUsecase(userRepo, jwtSvc)
 	workoutUC := usecase.NewWorkoutUsecase(workoutRepo)
 	exerciseUC := usecase.NewExerciseUsecase(exerciseRepo)
-	handler := httpdelivery.NewHandler(userUC, workoutUC, exerciseUC)
+	scheduledUC := usecase.NewScheduledWorkoutUsecase(scheduledRepo, db)
+	handler := httpdelivery.NewHandler(userUC, workoutUC, exerciseUC, scheduledUC)
 	router := httpdelivery.NewRouter(handler, jwtSvc)
 	_, _, _ = exerciseRepo, workoutUC, router
 

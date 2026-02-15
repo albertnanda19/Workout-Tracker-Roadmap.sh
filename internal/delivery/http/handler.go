@@ -44,14 +44,20 @@ type UpdateWorkoutRequest struct {
 	Exercises []CreateWorkoutExerciseInput `json:"exercises"`
 }
 
-type Handler struct {
-	userUsecase     *usecase.UserUsecase
-	workoutUsecase  *usecase.WorkoutUsecase
-	exerciseUsecase *usecase.ExerciseUsecase
+type ScheduleWorkoutRequest struct {
+	WorkoutPlanID string `json:"workout_plan_id"`
+	ScheduledDate string `json:"scheduled_date"`
 }
 
-func NewHandler(userUC *usecase.UserUsecase, workoutUC *usecase.WorkoutUsecase, exerciseUC *usecase.ExerciseUsecase) *Handler {
-	return &Handler{userUsecase: userUC, workoutUsecase: workoutUC, exerciseUsecase: exerciseUC}
+type Handler struct {
+	userUsecase             *usecase.UserUsecase
+	workoutUsecase          *usecase.WorkoutUsecase
+	exerciseUsecase         *usecase.ExerciseUsecase
+	scheduledWorkoutUsecase *usecase.ScheduledWorkoutUsecase
+}
+
+func NewHandler(userUC *usecase.UserUsecase, workoutUC *usecase.WorkoutUsecase, exerciseUC *usecase.ExerciseUsecase, scheduledUC *usecase.ScheduledWorkoutUsecase) *Handler {
+	return &Handler{userUsecase: userUC, workoutUsecase: workoutUC, exerciseUsecase: exerciseUC, scheduledWorkoutUsecase: scheduledUC}
 }
 
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
@@ -375,4 +381,113 @@ func (h *Handler) Exercises(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.JSON(w, http.StatusOK, exercises)
+}
+
+func (h *Handler) ScheduledWorkouts(w http.ResponseWriter, r *http.Request) {
+	userID, ok := GetUserIDFromContext(r.Context())
+	if !ok {
+		response.JSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+
+	switch r.Method {
+	case http.MethodPost:
+		var req ScheduleWorkoutRequest
+		dec := json.NewDecoder(r.Body)
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&req); err != nil {
+			response.JSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+			return
+		}
+
+		req.WorkoutPlanID = strings.TrimSpace(req.WorkoutPlanID)
+		req.ScheduledDate = strings.TrimSpace(req.ScheduledDate)
+		if req.WorkoutPlanID == "" || req.ScheduledDate == "" {
+			response.JSON(w, http.StatusBadRequest, map[string]string{"error": "workout_plan_id and scheduled_date are required"})
+			return
+		}
+
+		d, err := time.Parse("2006-01-02", req.ScheduledDate)
+		if err != nil {
+			response.JSON(w, http.StatusBadRequest, map[string]string{"error": "scheduled_date must be YYYY-MM-DD"})
+			return
+		}
+
+		err = h.scheduledWorkoutUsecase.ScheduleWorkout(r.Context(), userID, req.WorkoutPlanID, d)
+		if err != nil {
+			if errors.Is(err, usecase.ErrScheduleConflict) {
+				response.JSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
+				return
+			}
+			if errors.Is(err, usecase.ErrForbiddenPlan) {
+				response.JSON(w, http.StatusForbidden, map[string]string{"error": "forbidden"})
+				return
+			}
+			response.JSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+
+		response.JSON(w, http.StatusCreated, map[string]string{"message": "scheduled"})
+		return
+
+	case http.MethodGet:
+		dateParam := strings.TrimSpace(r.URL.Query().Get("date"))
+		if dateParam != "" {
+			d, err := time.Parse("2006-01-02", dateParam)
+			if err != nil {
+				response.JSON(w, http.StatusBadRequest, map[string]string{"error": "date must be YYYY-MM-DD"})
+				return
+			}
+
+			items, err := h.scheduledWorkoutUsecase.GetUserScheduleByDate(r.Context(), userID, d)
+			if err != nil {
+				response.JSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to get schedules"})
+				return
+			}
+			response.JSON(w, http.StatusOK, items)
+			return
+		}
+
+		items, err := h.scheduledWorkoutUsecase.GetAllUserSchedules(r.Context(), userID)
+		if err != nil {
+			response.JSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to get schedules"})
+			return
+		}
+		response.JSON(w, http.StatusOK, items)
+		return
+	default:
+		response.JSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+}
+
+func (h *Handler) DeleteScheduledWorkout(w http.ResponseWriter, r *http.Request) {
+	userID, ok := GetUserIDFromContext(r.Context())
+	if !ok {
+		response.JSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+
+	if r.Method != http.MethodDelete {
+		response.JSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+
+	id := strings.TrimPrefix(r.URL.Path, "/api/workouts/schedule/")
+	id = strings.TrimSpace(id)
+	if id == "" || strings.Contains(id, "/") {
+		response.JSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+		return
+	}
+
+	if err := h.scheduledWorkoutUsecase.DeleteSchedule(r.Context(), id, userID); err != nil {
+		if errors.Is(err, usecase.ErrScheduleNotFound) {
+			response.JSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+			return
+		}
+		response.JSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to delete schedule"})
+		return
+	}
+
+	response.JSON(w, http.StatusOK, map[string]string{"message": "deleted"})
 }

@@ -20,6 +20,8 @@ func NewRouter(handler *Handler, jwtService *auth.JWTService) http.Handler {
 	jwtMiddleware := JWTMiddleware(jwtService)
 	mux.Handle("/api/me", jwtMiddleware(http.HandlerFunc(handler.Me)))
 	mux.Handle("/api/exercises", jwtMiddleware(http.HandlerFunc(handler.Exercises)))
+	mux.Handle("/api/workouts/schedule", jwtMiddleware(http.HandlerFunc(handler.ScheduledWorkouts)))
+	mux.Handle("/api/workouts/schedule/", jwtMiddleware(http.HandlerFunc(handler.DeleteScheduledWorkout)))
 	mux.Handle("/api/workouts", jwtMiddleware(http.HandlerFunc(handler.Workouts)))
 	mux.Handle("/api/workouts/", jwtMiddleware(http.HandlerFunc(handler.WorkoutByID)))
 

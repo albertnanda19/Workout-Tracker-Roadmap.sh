@@ -13,3 +13,7 @@ type ScheduledWorkoutRepository interface {
 	GetByUser(ctx context.Context, userID string) ([]domain.ScheduledWorkout, error)
 	Delete(ctx context.Context, id string, userID string) error
 }
+
+type WorkoutPlanChecker interface {
+	GetOwnerID(ctx context.Context, workoutPlanID string) (string, error)
+}

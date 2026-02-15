@@ -168,6 +168,9 @@ func (u *WorkoutUsecase) DeletePlan(ctx context.Context, userID string, planID s
 	}
 
 	if err := u.repo.DeletePlan(ctx, planID, userID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("delete plan: %w", domain.ErrNotFound)
+		}
 		return fmt.Errorf("delete plan: %w", err)
 	}
 

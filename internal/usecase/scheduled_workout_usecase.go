@@ -12,12 +12,12 @@ import (
 )
 
 type ScheduledWorkoutUsecase struct {
-	repo repository.ScheduledWorkoutRepository
-	db   *sql.DB
+	repo        repository.ScheduledWorkoutRepository
+	planChecker repository.WorkoutPlanChecker
 }
 
-func NewScheduledWorkoutUsecase(repo repository.ScheduledWorkoutRepository, db *sql.DB) *ScheduledWorkoutUsecase {
-	return &ScheduledWorkoutUsecase{repo: repo, db: db}
+func NewScheduledWorkoutUsecase(repo repository.ScheduledWorkoutRepository, planChecker repository.WorkoutPlanChecker) *ScheduledWorkoutUsecase {
+	return &ScheduledWorkoutUsecase{repo: repo, planChecker: planChecker}
 }
 
 func (u *ScheduledWorkoutUsecase) ScheduleWorkout(ctx context.Context, userID, workoutPlanID string, scheduledDate time.Time) error {
@@ -35,18 +35,15 @@ func (u *ScheduledWorkoutUsecase) ScheduleWorkout(ctx context.Context, userID, w
 		return fmt.Errorf("schedule workout: %w", domain.ErrInvalidInput)
 	}
 
-	if u.db != nil {
-		var ok bool
-		if err := u.db.QueryRowContext(ctx, `
-			SELECT EXISTS(
-				SELECT 1 FROM workout_plans WHERE id = $1 AND user_id = $2
-			)
-		`, workoutPlanID, userID).Scan(&ok); err != nil {
-			return fmt.Errorf("schedule workout: %w", err)
+	ownerID, err := u.planChecker.GetOwnerID(ctx, workoutPlanID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("schedule workout: %w", domain.ErrNotFound)
 		}
-		if !ok {
-			return fmt.Errorf("schedule workout: %w", domain.ErrForbidden)
-		}
+		return fmt.Errorf("schedule workout: %w", err)
+	}
+	if ownerID != userID {
+		return fmt.Errorf("schedule workout: %w", domain.ErrForbidden)
 	}
 
 	existing, err := u.repo.GetByUserAndDate(ctx, userID, date)

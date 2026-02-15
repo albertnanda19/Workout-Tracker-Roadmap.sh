@@ -1,0 +1,1003 @@
+openapi: 3.0.3
+info:
+  title: Workout Tracker API
+  description: REST API for managing workout plans, schedules, and user authentication.
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8080
+    description: Local Development Server
+
+tags:
+  - name: Auth
+    description: Authentication endpoints
+  - name: Workout
+    description: Workout plan management
+  - name: Schedule
+    description: Scheduled workout management
+  - name: System
+    description: System health endpoints
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      tags:
+        - System
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+              examples:
+                ok:
+                  value:
+                    status: ok
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/register:
+    post:
+      summary: Register new user
+      description: Creates a new user account.
+      tags:
+        - Auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+            examples:
+              example:
+                value:
+                  name: John Doe
+                  email: user@example.com
+                  password: password123
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+              examples:
+                example:
+                  value:
+                    id: 2f3a4c1b-1111-2222-3333-444455556666
+                    name: John Doe
+                    email: user@example.com
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/login:
+    post:
+      summary: Login
+      description: Authenticates a user and returns a JWT access token.
+      tags:
+        - Auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+            examples:
+              example:
+                value:
+                  email: user@example.com
+                  password: password123
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+              examples:
+                example:
+                  value:
+                    access_token: jwt-token-string
+                    expires_at: "2026-02-20T00:00:00Z"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/me:
+    get:
+      summary: Get current user
+      description: Returns the authenticated user's profile.
+      tags:
+        - Auth
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+              examples:
+                example:
+                  value:
+                    id: 2f3a4c1b-1111-2222-3333-444455556666
+                    name: John Doe
+                    email: user@example.com
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/exercises:
+    get:
+      summary: List exercises
+      description: Returns all available exercises.
+      tags:
+        - Workout
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Exercise"
+              examples:
+                example:
+                  value:
+                    - id: 11111111-1111-1111-1111-111111111111
+                      name: Bench Press
+                      description: Chest exercise
+                      category: Strength
+                      muscle_group: Chest
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/workouts:
+    post:
+      summary: Create workout plan
+      description: Creates a new workout plan for the authenticated user.
+      tags:
+        - Workout
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateWorkoutRequest"
+            examples:
+              example:
+                value:
+                  name: Push Day
+                  notes: chest + triceps
+                  exercises:
+                    - exercise_id: 11111111-1111-1111-1111-111111111111
+                      sets: 3
+                      reps: 10
+                      weight: 60
+                      order_index: 0
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+              examples:
+                example:
+                  value:
+                    message: workout created
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    get:
+      summary: List workout plans
+      description: Returns workout plans owned by the authenticated user, with optional pagination and name filter.
+      tags:
+        - Workout
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+          example: 1
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+          example: 10
+        - in: query
+          name: name
+          required: false
+          schema:
+            type: string
+          description: Optional case-insensitive filter for workout plan name
+          example: push
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedWorkoutResponse"
+              examples:
+                example:
+                  value:
+                    data:
+                      - id: 22222222-2222-2222-2222-222222222222
+                        name: Push Day
+                        notes: chest + triceps
+                        created_at: "2026-02-15T10:00:00Z"
+                        updated_at: "2026-02-15T10:00:00Z"
+                    meta:
+                      total: 1
+                      page: 1
+                      limit: 10
+                      total_pages: 1
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/workouts/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+        description: Workout plan ID
+
+    get:
+      summary: Get workout plan by ID
+      description: Returns a workout plan owned by the authenticated user.
+      tags:
+        - Workout
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkoutPlanDetail"
+              examples:
+                example:
+                  value:
+                    ID: 22222222-2222-2222-2222-222222222222
+                    UserID: 2f3a4c1b-1111-2222-3333-444455556666
+                    Name: Push Day
+                    Notes: chest + triceps
+                    CreatedAt: "2026-02-15T10:00:00Z"
+                    UpdatedAt: "2026-02-15T10:00:00Z"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    put:
+      summary: Update workout plan
+      description: Updates a workout plan owned by the authenticated user.
+      tags:
+        - Workout
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateWorkoutRequest"
+            examples:
+              example:
+                value:
+                  name: Push Day Updated
+                  notes: updated notes
+                  exercises:
+                    - exercise_id: 11111111-1111-1111-1111-111111111111
+                      sets: 4
+                      reps: 8
+                      weight: 65
+                      order_index: 0
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+              examples:
+                example:
+                  value:
+                    message: workout updated
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    delete:
+      summary: Delete workout plan
+      description: Deletes a workout plan owned by the authenticated user.
+      tags:
+        - Workout
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+              examples:
+                example:
+                  value:
+                    message: workout deleted
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/workouts/schedule:
+    post:
+      summary: Schedule a workout plan
+      description: Schedules an existing workout plan for a future date.
+      tags:
+        - Schedule
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScheduleWorkoutRequest"
+            examples:
+              example:
+                value:
+                  workout_plan_id: 22222222-2222-2222-2222-222222222222
+                  scheduled_date: "2026-02-20"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+              examples:
+                example:
+                  value:
+                    message: scheduled
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    get:
+      summary: List scheduled workouts
+      description: Returns scheduled workouts for the authenticated user, with optional pagination and date filter.
+      tags:
+        - Schedule
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+          example: 1
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+          example: 10
+        - in: query
+          name: date
+          required: false
+          schema:
+            type: string
+            format: date
+          description: Optional filter (YYYY-MM-DD)
+          example: "2026-02-20"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedScheduledWorkoutResponse"
+              examples:
+                example:
+                  value:
+                    data:
+                      - id: 33333333-3333-3333-3333-333333333333
+                        workout_plan_id: 22222222-2222-2222-2222-222222222222
+                        scheduled_date: "2026-02-20T00:00:00Z"
+                        created_at: "2026-02-15T10:00:00Z"
+                    meta:
+                      total: 1
+                      page: 1
+                      limit: 10
+                      total_pages: 1
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/workouts/schedule/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+        description: Scheduled workout ID
+
+    delete:
+      summary: Delete scheduled workout
+      description: Deletes a scheduled workout owned by the authenticated user.
+      tags:
+        - Schedule
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+              examples:
+                example:
+                  value:
+                    message: deleted
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    RegisterRequest:
+      type: object
+      required:
+        - name
+        - email
+        - password
+      properties:
+        name:
+          type: string
+          example: John Doe
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        password:
+          type: string
+          minLength: 6
+          example: password123
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        password:
+          type: string
+          example: password123
+
+    AuthResponse:
+      type: object
+      required:
+        - access_token
+        - expires_at
+      properties:
+        access_token:
+          type: string
+          example: jwt-token-string
+        expires_at:
+          type: string
+          format: date-time
+          example: "2026-02-20T00:00:00Z"
+
+    Exercise:
+      type: object
+      required:
+        - id
+        - name
+        - description
+        - category
+        - muscle_group
+      properties:
+        id:
+          type: string
+          example: 11111111-1111-1111-1111-111111111111
+        name:
+          type: string
+          example: Bench Press
+        description:
+          type: string
+          example: Chest exercise
+        category:
+          type: string
+          example: Strength
+        muscle_group:
+          type: string
+          example: Chest
+
+    User:
+      type: object
+      required:
+        - id
+        - name
+        - email
+      properties:
+        id:
+          type: string
+          example: 2f3a4c1b-1111-2222-3333-444455556666
+        name:
+          type: string
+          example: John Doe
+        email:
+          type: string
+          format: email
+          example: user@example.com
+
+    WorkoutExercise:
+      type: object
+      required:
+        - exercise_id
+        - sets
+        - reps
+        - order_index
+      properties:
+        exercise_id:
+          type: string
+          example: 11111111-1111-1111-1111-111111111111
+        sets:
+          type: integer
+          minimum: 1
+          example: 3
+        reps:
+          type: integer
+          minimum: 1
+          example: 10
+        weight:
+          type: number
+          format: float
+          example: 60
+        order_index:
+          type: integer
+          minimum: 0
+          example: 0
+
+    CreateWorkoutRequest:
+      type: object
+      required:
+        - name
+        - exercises
+      properties:
+        name:
+          type: string
+          example: Push Day
+        notes:
+          type: string
+          example: chest + triceps
+        exercises:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/WorkoutExercise"
+
+    UpdateWorkoutRequest:
+      type: object
+      required:
+        - name
+        - exercises
+      properties:
+        name:
+          type: string
+          example: Push Day Updated
+        notes:
+          type: string
+          example: updated notes
+        exercises:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/WorkoutExercise"
+
+    WorkoutPlan:
+      type: object
+      required:
+        - id
+        - name
+        - notes
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          example: 22222222-2222-2222-2222-222222222222
+        name:
+          type: string
+          example: Push Day
+        notes:
+          type: string
+          example: chest + triceps
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-02-15T10:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2026-02-15T10:00:00Z"
+
+    WorkoutPlanDetail:
+      type: object
+      required:
+        - ID
+        - UserID
+        - Name
+        - Notes
+        - CreatedAt
+        - UpdatedAt
+      properties:
+        ID:
+          type: string
+          example: 22222222-2222-2222-2222-222222222222
+        UserID:
+          type: string
+          example: 2f3a4c1b-1111-2222-3333-444455556666
+        Name:
+          type: string
+          example: Push Day
+        Notes:
+          type: string
+          example: chest + triceps
+        CreatedAt:
+          type: string
+          format: date-time
+          example: "2026-02-15T10:00:00Z"
+        UpdatedAt:
+          type: string
+          format: date-time
+          example: "2026-02-15T10:00:00Z"
+
+    ScheduleWorkoutRequest:
+      type: object
+      required:
+        - workout_plan_id
+        - scheduled_date
+      properties:
+        workout_plan_id:
+          type: string
+          example: 22222222-2222-2222-2222-222222222222
+        scheduled_date:
+          type: string
+          format: date
+          example: "2026-02-20"
+
+    ScheduledWorkout:
+      type: object
+      required:
+        - id
+        - workout_plan_id
+        - scheduled_date
+        - created_at
+      properties:
+        id:
+          type: string
+          example: 33333333-3333-3333-3333-333333333333
+        workout_plan_id:
+          type: string
+          example: 22222222-2222-2222-2222-222222222222
+        scheduled_date:
+          type: string
+          format: date-time
+          example: "2026-02-20T00:00:00Z"
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-02-15T10:00:00Z"
+
+    PaginationMeta:
+      type: object
+      required:
+        - total
+        - page
+        - limit
+        - total_pages
+      properties:
+        total:
+          type: integer
+          example: 100
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 10
+        total_pages:
+          type: integer
+          example: 10
+
+    PaginatedWorkoutResponse:
+      type: object
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkoutPlan"
+        meta:
+          $ref: "#/components/schemas/PaginationMeta"
+
+    PaginatedScheduledWorkoutResponse:
+      type: object
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScheduledWorkout"
+        meta:
+          $ref: "#/components/schemas/PaginationMeta"
+
+    MessageResponse:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          example: ok
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          example: invalid_input
+        message:
+          type: string
+          example: request failed
+        trace_id:
+          type: string
+          description: Optional request trace identifier.

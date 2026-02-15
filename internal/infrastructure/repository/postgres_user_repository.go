@@ -24,9 +24,14 @@ func (r *PostgresUserRepository) Create(ctx context.Context, user *domain.User) 
 	const q = `
 		INSERT INTO users (name, email, password_hash)
 		VALUES ($1, $2, $3)
+		RETURNING id, created_at, updated_at
 	`
 
-	if _, err := r.db.ExecContext(ctx, q, user.Name, user.Email, user.PasswordHash); err != nil {
+	if err := r.db.QueryRowContext(ctx, q, user.Name, user.Email, user.PasswordHash).Scan(
+		&user.ID,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	); err != nil {
 		return fmt.Errorf("create user: %w", err)
 	}
 

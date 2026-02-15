@@ -47,3 +47,35 @@ func (j *JWTService) Generate(userID string) (string, time.Time, error) {
 
 	return s, exp, nil
 }
+
+func (j *JWTService) Validate(tokenString string) (string, error) {
+	if j == nil {
+		return "", errors.New("jwt service is nil")
+	}
+	if j.secretKey == "" {
+		return "", errors.New("jwt secret key is empty")
+	}
+
+	claims := &jwt.RegisteredClaims{}
+	_, err := jwt.ParseWithClaims(
+		tokenString,
+		claims,
+		func(t *jwt.Token) (interface{}, error) {
+			if t.Method != jwt.SigningMethodHS256 {
+				return nil, errors.New("unexpected signing method")
+			}
+			return []byte(j.secretKey), nil
+		},
+		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
+		jwt.WithIssuer(j.issuer),
+	)
+	if err != nil {
+		return "", err
+	}
+
+	if claims.Subject == "" {
+		return "", errors.New("token subject is empty")
+	}
+
+	return claims.Subject, nil
+}

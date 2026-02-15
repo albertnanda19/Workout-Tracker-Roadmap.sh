@@ -47,13 +47,13 @@ func main() {
 
 	jwtSvc := auth.NewJWTService(cfg.JWTSecret)
 	userUC := usecase.NewUserUsecase(userRepo, jwtSvc)
-	_, _, _, _ = userRepo, workoutRepo, exerciseRepo, userUC
-
-	h := httpdelivery.NewRouter()
+	handler := httpdelivery.NewHandler(userUC)
+	router := httpdelivery.NewRouter(handler, jwtSvc)
+	_, _, _ = workoutRepo, exerciseRepo, router
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           h,
+		Handler:           router,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

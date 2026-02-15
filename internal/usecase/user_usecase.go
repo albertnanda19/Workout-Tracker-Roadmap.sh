@@ -91,3 +91,18 @@ func (u *UserUsecase) Login(ctx context.Context, email, password string) (*domai
 
 	return &domain.AuthToken{AccessToken: token, ExpiresAt: exp}, nil
 }
+
+func (u *UserUsecase) GetByID(ctx context.Context, id string) (*domain.User, error) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return nil, errors.New("id is required")
+	}
+
+	user, err := u.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	user.PasswordHash = ""
+	return user, nil
+}

@@ -24,12 +24,27 @@ type LoginRequest struct {
 	Password string `json:"password"`
 }
 
-type Handler struct {
-	userUsecase *usecase.UserUsecase
+type CreateWorkoutRequest struct {
+	Name      string                       `json:"name"`
+	Notes     string                       `json:"notes"`
+	Exercises []CreateWorkoutExerciseInput `json:"exercises"`
 }
 
-func NewHandler(userUC *usecase.UserUsecase) *Handler {
-	return &Handler{userUsecase: userUC}
+type CreateWorkoutExerciseInput struct {
+	ExerciseID string  `json:"exercise_id"`
+	Sets       int     `json:"sets"`
+	Reps       int     `json:"reps"`
+	Weight     float64 `json:"weight"`
+	OrderIndex int     `json:"order_index"`
+}
+
+type Handler struct {
+	userUsecase    *usecase.UserUsecase
+	workoutUsecase *usecase.WorkoutUsecase
+}
+
+func NewHandler(userUC *usecase.UserUsecase, workoutUC *usecase.WorkoutUsecase) *Handler {
+	return &Handler{userUsecase: userUC, workoutUsecase: workoutUC}
 }
 
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
@@ -145,4 +160,137 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 		"name":  user.Name,
 		"email": user.Email,
 	})
+}
+
+func (h *Handler) Workouts(w http.ResponseWriter, r *http.Request) {
+	userID, ok := GetUserIDFromContext(r.Context())
+	if !ok {
+		response.JSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+
+	switch r.Method {
+	case http.MethodPost:
+		h.CreateWorkout(w, r, userID)
+		return
+	case http.MethodGet:
+		h.ListWorkouts(w, r, userID)
+		return
+	default:
+		response.JSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+}
+
+func (h *Handler) WorkoutByID(w http.ResponseWriter, r *http.Request) {
+	userID, ok := GetUserIDFromContext(r.Context())
+	if !ok {
+		response.JSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+
+	planID := strings.TrimPrefix(r.URL.Path, "/api/workouts/")
+	planID = strings.TrimSpace(planID)
+	if planID == "" || strings.Contains(planID, "/") {
+		response.JSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		h.GetWorkoutByID(w, r, userID, planID)
+		return
+	case http.MethodDelete:
+		h.DeleteWorkout(w, r, userID, planID)
+		return
+	default:
+		response.JSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+}
+
+func (h *Handler) CreateWorkout(w http.ResponseWriter, r *http.Request, userID string) {
+	var req CreateWorkoutRequest
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil {
+		response.JSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+		return
+	}
+
+	req.Name = strings.TrimSpace(req.Name)
+	req.Notes = strings.TrimSpace(req.Notes)
+	if req.Name == "" {
+		response.JSON(w, http.StatusBadRequest, map[string]string{"error": "name is required"})
+		return
+	}
+	if len(req.Exercises) < 1 {
+		response.JSON(w, http.StatusBadRequest, map[string]string{"error": "at least 1 exercise is required"})
+		return
+	}
+
+	exercises := make([]domain.WorkoutPlanExercise, 0, len(req.Exercises))
+	for _, in := range req.Exercises {
+		in.ExerciseID = strings.TrimSpace(in.ExerciseID)
+		if in.ExerciseID == "" {
+			response.JSON(w, http.StatusBadRequest, map[string]string{"error": "exercise_id is required"})
+			return
+		}
+		if in.Sets <= 0 {
+			response.JSON(w, http.StatusBadRequest, map[string]string{"error": "sets must be greater than 0"})
+			return
+		}
+		if in.Reps <= 0 {
+			response.JSON(w, http.StatusBadRequest, map[string]string{"error": "reps must be greater than 0"})
+			return
+		}
+
+		exercises = append(exercises, domain.WorkoutPlanExercise{
+			ExerciseID: in.ExerciseID,
+			Sets:       in.Sets,
+			Reps:       in.Reps,
+			Weight:     in.Weight,
+			OrderIndex: in.OrderIndex,
+		})
+	}
+
+	if err := h.workoutUsecase.CreatePlan(r.Context(), userID, req.Name, req.Notes, exercises); err != nil {
+		response.JSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+
+	response.JSON(w, http.StatusCreated, map[string]string{"message": "workout created"})
+}
+
+func (h *Handler) ListWorkouts(w http.ResponseWriter, r *http.Request, userID string) {
+	plans, err := h.workoutUsecase.GetPlans(r.Context(), userID)
+	if err != nil {
+		response.JSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to list workouts"})
+		return
+	}
+
+	response.JSON(w, http.StatusOK, plans)
+}
+
+func (h *Handler) GetWorkoutByID(w http.ResponseWriter, r *http.Request, userID string, planID string) {
+	plan, err := h.workoutUsecase.GetPlanByID(r.Context(), userID, planID)
+	if err != nil {
+		if errors.Is(err, usecase.ErrWorkoutNotFound) {
+			response.JSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+			return
+		}
+		response.JSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to get workout"})
+		return
+	}
+
+	response.JSON(w, http.StatusOK, plan)
+}
+
+func (h *Handler) DeleteWorkout(w http.ResponseWriter, r *http.Request, userID string, planID string) {
+	if err := h.workoutUsecase.DeletePlan(r.Context(), userID, planID); err != nil {
+		response.JSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to delete workout"})
+		return
+	}
+
+	response.JSON(w, http.StatusOK, map[string]string{"message": "workout deleted"})
 }

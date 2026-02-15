@@ -15,11 +15,13 @@ type WorkoutPlan struct {
 }
 
 type WorkoutPlanExercise struct {
-	ExerciseID string
-	Sets       int
-	Reps       int
-	Weight     *float64
-	OrderIndex int
+	ID            string
+	WorkoutPlanID string
+	ExerciseID    string
+	Sets          int
+	Reps          int
+	Weight        float64
+	OrderIndex    int
 }
 
 type WorkoutRepository interface {

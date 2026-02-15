@@ -38,6 +38,12 @@ type CreateWorkoutExerciseInput struct {
 	OrderIndex int     `json:"order_index"`
 }
 
+type UpdateWorkoutRequest struct {
+	Name      string                       `json:"name"`
+	Notes     string                       `json:"notes"`
+	Exercises []CreateWorkoutExerciseInput `json:"exercises"`
+}
+
 type Handler struct {
 	userUsecase     *usecase.UserUsecase
 	workoutUsecase  *usecase.WorkoutUsecase
@@ -201,6 +207,9 @@ func (h *Handler) WorkoutByID(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		h.GetWorkoutByID(w, r, userID, planID)
 		return
+	case http.MethodPut:
+		h.UpdateWorkout(w, r, userID, planID)
+		return
 	case http.MethodDelete:
 		h.DeleteWorkout(w, r, userID, planID)
 		return
@@ -294,6 +303,63 @@ func (h *Handler) DeleteWorkout(w http.ResponseWriter, r *http.Request, userID s
 	}
 
 	response.JSON(w, http.StatusOK, map[string]string{"message": "workout deleted"})
+}
+
+func (h *Handler) UpdateWorkout(w http.ResponseWriter, r *http.Request, userID string, planID string) {
+	var req UpdateWorkoutRequest
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil {
+		response.JSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+		return
+	}
+
+	req.Name = strings.TrimSpace(req.Name)
+	req.Notes = strings.TrimSpace(req.Notes)
+	if req.Name == "" {
+		response.JSON(w, http.StatusBadRequest, map[string]string{"error": "name is required"})
+		return
+	}
+	if len(req.Exercises) < 1 {
+		response.JSON(w, http.StatusBadRequest, map[string]string{"error": "at least 1 exercise is required"})
+		return
+	}
+
+	exercises := make([]domain.WorkoutPlanExercise, 0, len(req.Exercises))
+	for _, in := range req.Exercises {
+		in.ExerciseID = strings.TrimSpace(in.ExerciseID)
+		if in.ExerciseID == "" {
+			response.JSON(w, http.StatusBadRequest, map[string]string{"error": "exercise_id is required"})
+			return
+		}
+		if in.Sets <= 0 {
+			response.JSON(w, http.StatusBadRequest, map[string]string{"error": "sets must be greater than 0"})
+			return
+		}
+		if in.Reps <= 0 {
+			response.JSON(w, http.StatusBadRequest, map[string]string{"error": "reps must be greater than 0"})
+			return
+		}
+
+		exercises = append(exercises, domain.WorkoutPlanExercise{
+			ExerciseID: in.ExerciseID,
+			Sets:       in.Sets,
+			Reps:       in.Reps,
+			Weight:     in.Weight,
+			OrderIndex: in.OrderIndex,
+		})
+	}
+
+	if err := h.workoutUsecase.UpdatePlan(r.Context(), userID, planID, req.Name, req.Notes, exercises); err != nil {
+		if errors.Is(err, usecase.ErrWorkoutNotFound) {
+			response.JSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+			return
+		}
+		response.JSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+
+	response.JSON(w, http.StatusOK, map[string]string{"message": "workout updated"})
 }
 
 func (h *Handler) Exercises(w http.ResponseWriter, r *http.Request) {

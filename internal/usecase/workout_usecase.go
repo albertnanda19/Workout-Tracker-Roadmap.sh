@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"strings"
 
@@ -58,6 +59,61 @@ func (u *WorkoutUsecase) CreatePlan(
 	}
 
 	if err := u.repo.CreatePlan(ctx, plan, exercises); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (u *WorkoutUsecase) UpdatePlan(
+	ctx context.Context,
+	userID string,
+	planID string,
+	name string,
+	notes string,
+	exercises []domain.WorkoutPlanExercise,
+) error {
+	userID = strings.TrimSpace(userID)
+	planID = strings.TrimSpace(planID)
+	name = strings.TrimSpace(name)
+	notes = strings.TrimSpace(notes)
+
+	if userID == "" {
+		return errors.New("userID is required")
+	}
+	if planID == "" {
+		return errors.New("planID is required")
+	}
+	if name == "" {
+		return errors.New("name is required")
+	}
+	if len(exercises) < 1 {
+		return errors.New("at least 1 exercise is required")
+	}
+
+	for _, ex := range exercises {
+		if strings.TrimSpace(ex.ExerciseID) == "" {
+			return errors.New("exercise_id is required")
+		}
+		if ex.Sets <= 0 {
+			return errors.New("sets must be greater than 0")
+		}
+		if ex.Reps <= 0 {
+			return errors.New("reps must be greater than 0")
+		}
+	}
+
+	plan := &domain.WorkoutPlan{
+		ID:     planID,
+		UserID: userID,
+		Name:   name,
+		Notes:  notes,
+	}
+
+	if err := u.repo.UpdatePlan(ctx, plan, exercises); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrWorkoutNotFound
+		}
 		return err
 	}
 

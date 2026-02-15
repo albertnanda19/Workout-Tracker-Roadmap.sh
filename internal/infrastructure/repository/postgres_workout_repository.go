@@ -59,6 +59,64 @@ func (r *PostgresWorkoutRepository) CreatePlan(ctx context.Context, plan *domain
 	return nil
 }
 
+func (r *PostgresWorkoutRepository) UpdatePlan(ctx context.Context, plan *domain.WorkoutPlan, exercises []domain.WorkoutPlanExercise) error {
+	if plan == nil {
+		return fmt.Errorf("update plan: plan is nil")
+	}
+
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("update plan: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	var existingID string
+	if err := tx.QueryRowContext(ctx, `
+		SELECT id
+		FROM workout_plans
+		WHERE id = $1 AND user_id = $2
+	`, plan.ID, plan.UserID).Scan(&existingID); err != nil {
+		if err == sql.ErrNoRows {
+			return err
+		}
+		return fmt.Errorf("update plan: %w", err)
+	}
+
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE workout_plans
+		SET name = $1, notes = $2, updated_at = NOW()
+		WHERE id = $3 AND user_id = $4
+	`, plan.Name, plan.Notes, plan.ID, plan.UserID); err != nil {
+		return fmt.Errorf("update plan: %w", err)
+	}
+
+	if _, err := tx.ExecContext(ctx, `
+		DELETE FROM workout_plan_exercises
+		WHERE workout_plan_id = $1
+	`, plan.ID); err != nil {
+		return fmt.Errorf("update plan: %w", err)
+	}
+
+	const insertPlanExercise = `
+		INSERT INTO workout_plan_exercises (workout_plan_id, exercise_id, sets, reps, weight, order_index)
+		VALUES ($1, $2, $3, $4, $5, $6)
+	`
+
+	for _, ex := range exercises {
+		if _, err := tx.ExecContext(ctx, insertPlanExercise, plan.ID, ex.ExerciseID, ex.Sets, ex.Reps, ex.Weight, ex.OrderIndex); err != nil {
+			return fmt.Errorf("update plan: %w", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("update plan: %w", err)
+	}
+
+	return nil
+}
+
 func (r *PostgresWorkoutRepository) GetPlansByUser(ctx context.Context, userID string) ([]domain.WorkoutPlan, error) {
 	const q = `
 		SELECT id, user_id, name, notes, created_at, updated_at

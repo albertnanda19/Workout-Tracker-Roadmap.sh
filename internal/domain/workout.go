@@ -26,6 +26,7 @@ type WorkoutPlanExercise struct {
 
 type WorkoutRepository interface {
 	CreatePlan(ctx context.Context, plan *WorkoutPlan, exercises []WorkoutPlanExercise) error
+	UpdatePlan(ctx context.Context, plan *WorkoutPlan, exercises []WorkoutPlanExercise) error
 	GetPlansByUser(ctx context.Context, userID string) ([]WorkoutPlan, error)
 	GetPlanByID(ctx context.Context, id string, userID string) (*WorkoutPlan, error)
 	DeletePlan(ctx context.Context, id string, userID string) error

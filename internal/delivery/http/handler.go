@@ -1,13 +1,13 @@
 package http
 
 import (
-	"database/sql"
 	"encoding/json"
-	"errors"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
 
+	httperr "workout-tracker/internal/delivery/http/response"
 	"workout-tracker/internal/domain"
 	"workout-tracker/internal/usecase"
 	"workout-tracker/pkg/response"
@@ -50,19 +50,20 @@ type ScheduleWorkoutRequest struct {
 }
 
 type Handler struct {
+	logger                  *slog.Logger
 	userUsecase             *usecase.UserUsecase
 	workoutUsecase          *usecase.WorkoutUsecase
 	exerciseUsecase         *usecase.ExerciseUsecase
 	scheduledWorkoutUsecase *usecase.ScheduledWorkoutUsecase
 }
 
-func NewHandler(userUC *usecase.UserUsecase, workoutUC *usecase.WorkoutUsecase, exerciseUC *usecase.ExerciseUsecase, scheduledUC *usecase.ScheduledWorkoutUsecase) *Handler {
-	return &Handler{userUsecase: userUC, workoutUsecase: workoutUC, exerciseUsecase: exerciseUC, scheduledWorkoutUsecase: scheduledUC}
+func NewHandler(logger *slog.Logger, userUC *usecase.UserUsecase, workoutUC *usecase.WorkoutUsecase, exerciseUC *usecase.ExerciseUsecase, scheduledUC *usecase.ScheduledWorkoutUsecase) *Handler {
+	return &Handler{logger: logger, userUsecase: userUC, workoutUsecase: workoutUC, exerciseUsecase: exerciseUC, scheduledWorkoutUsecase: scheduledUC}
 }
 
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		response.JSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		httperr.WriteError(w, r, h.logger, domain.ErrInvalidInput)
 		return
 	}
 
@@ -70,32 +71,28 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&req); err != nil {
-		response.JSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+		httperr.WriteError(w, r, h.logger, domain.ErrInvalidInput)
 		return
 	}
 
 	req.Name = strings.TrimSpace(req.Name)
 	req.Email = strings.TrimSpace(req.Email)
 	if req.Name == "" {
-		response.JSON(w, http.StatusBadRequest, map[string]string{"error": "name is required"})
+		httperr.WriteError(w, r, h.logger, domain.ErrInvalidInput)
 		return
 	}
 	if req.Email == "" {
-		response.JSON(w, http.StatusBadRequest, map[string]string{"error": "email is required"})
+		httperr.WriteError(w, r, h.logger, domain.ErrInvalidInput)
 		return
 	}
 	if len(req.Password) < 6 {
-		response.JSON(w, http.StatusBadRequest, map[string]string{"error": "password must be at least 6 characters"})
+		httperr.WriteError(w, r, h.logger, domain.ErrInvalidInput)
 		return
 	}
 
 	user, err := h.userUsecase.Register(r.Context(), req.Name, req.Email, req.Password)
 	if err != nil {
-		if errors.Is(err, domain.ErrEmailAlreadyExists) {
-			response.JSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
-			return
-		}
-		response.JSON(w, http.StatusBadRequest, map[string]string{"error": "failed to register"})
+		httperr.WriteError(w, r, h.logger, err)
 		return
 	}
 
@@ -108,7 +105,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		response.JSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		httperr.WriteError(w, r, h.logger, domain.ErrInvalidInput)
 		return
 	}
 
@@ -116,27 +113,23 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&req); err != nil {
-		response.JSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+		httperr.WriteError(w, r, h.logger, domain.ErrInvalidInput)
 		return
 	}
 
 	req.Email = strings.TrimSpace(req.Email)
 	if req.Email == "" {
-		response.JSON(w, http.StatusBadRequest, map[string]string{"error": "email is required"})
+		httperr.WriteError(w, r, h.logger, domain.ErrInvalidInput)
 		return
 	}
 	if req.Password == "" {
-		response.JSON(w, http.StatusBadRequest, map[string]string{"error": "password is required"})
+		httperr.WriteError(w, r, h.logger, domain.ErrInvalidInput)
 		return
 	}
 
 	token, err := h.userUsecase.Login(r.Context(), req.Email, req.Password)
 	if err != nil {
-		if errors.Is(err, domain.ErrInvalidCredentials) {
-			response.JSON(w, http.StatusUnauthorized, map[string]string{"error": err.Error()})
-			return
-		}
-		response.JSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to login"})
+		httperr.WriteError(w, r, h.logger, err)
 		return
 	}
 
@@ -148,23 +141,19 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		response.JSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		httperr.WriteError(w, r, h.logger, domain.ErrInvalidInput)
 		return
 	}
 
 	userID, ok := GetUserIDFromContext(r.Context())
 	if !ok {
-		response.JSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		httperr.WriteError(w, r, h.logger, domain.ErrUnauthorized)
 		return
 	}
 
 	user, err := h.userUsecase.GetByID(r.Context(), userID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			response.JSON(w, http.StatusNotFound, map[string]string{"error": "user not found"})
-			return
-		}
-		response.JSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to get user"})
+		httperr.WriteError(w, r, h.logger, err)
 		return
 	}
 
@@ -178,7 +167,7 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Workouts(w http.ResponseWriter, r *http.Request) {
 	userID, ok := GetUserIDFromContext(r.Context())
 	if !ok {
-		response.JSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		httperr.WriteError(w, r, h.logger, domain.ErrUnauthorized)
 		return
 	}
 
@@ -190,7 +179,7 @@ func (h *Handler) Workouts(w http.ResponseWriter, r *http.Request) {
 		h.ListWorkouts(w, r, userID)
 		return
 	default:
-		response.JSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		httperr.WriteError(w, r, h.logger, domain.ErrInvalidInput)
 		return
 	}
 }
@@ -198,14 +187,14 @@ func (h *Handler) Workouts(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) WorkoutByID(w http.ResponseWriter, r *http.Request) {
 	userID, ok := GetUserIDFromContext(r.Context())
 	if !ok {
-		response.JSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		httperr.WriteError(w, r, h.logger, domain.ErrUnauthorized)
 		return
 	}
 
 	planID := strings.TrimPrefix(r.URL.Path, "/api/workouts/")
 	planID = strings.TrimSpace(planID)
 	if planID == "" || strings.Contains(planID, "/") {
-		response.JSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+		httperr.WriteError(w, r, h.logger, domain.ErrNotFound)
 		return
 	}
 
@@ -220,7 +209,7 @@ func (h *Handler) WorkoutByID(w http.ResponseWriter, r *http.Request) {
 		h.DeleteWorkout(w, r, userID, planID)
 		return
 	default:
-		response.JSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		httperr.WriteError(w, r, h.logger, domain.ErrInvalidInput)
 		return
 	}
 }
@@ -230,18 +219,18 @@ func (h *Handler) CreateWorkout(w http.ResponseWriter, r *http.Request, userID s
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&req); err != nil {
-		response.JSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+		httperr.WriteError(w, r, h.logger, domain.ErrInvalidInput)
 		return
 	}
 
 	req.Name = strings.TrimSpace(req.Name)
 	req.Notes = strings.TrimSpace(req.Notes)
 	if req.Name == "" {
-		response.JSON(w, http.StatusBadRequest, map[string]string{"error": "name is required"})
+		httperr.WriteError(w, r, h.logger, domain.ErrInvalidInput)
 		return
 	}
 	if len(req.Exercises) < 1 {
-		response.JSON(w, http.StatusBadRequest, map[string]string{"error": "at least 1 exercise is required"})
+		httperr.WriteError(w, r, h.logger, domain.ErrInvalidInput)
 		return
 	}
 
@@ -249,15 +238,15 @@ func (h *Handler) CreateWorkout(w http.ResponseWriter, r *http.Request, userID s
 	for _, in := range req.Exercises {
 		in.ExerciseID = strings.TrimSpace(in.ExerciseID)
 		if in.ExerciseID == "" {
-			response.JSON(w, http.StatusBadRequest, map[string]string{"error": "exercise_id is required"})
+			httperr.WriteError(w, r, h.logger, domain.ErrInvalidInput)
 			return
 		}
 		if in.Sets <= 0 {
-			response.JSON(w, http.StatusBadRequest, map[string]string{"error": "sets must be greater than 0"})
+			httperr.WriteError(w, r, h.logger, domain.ErrInvalidInput)
 			return
 		}
 		if in.Reps <= 0 {
-			response.JSON(w, http.StatusBadRequest, map[string]string{"error": "reps must be greater than 0"})
+			httperr.WriteError(w, r, h.logger, domain.ErrInvalidInput)
 			return
 		}
 
@@ -271,7 +260,7 @@ func (h *Handler) CreateWorkout(w http.ResponseWriter, r *http.Request, userID s
 	}
 
 	if err := h.workoutUsecase.CreatePlan(r.Context(), userID, req.Name, req.Notes, exercises); err != nil {
-		response.JSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		httperr.WriteError(w, r, h.logger, err)
 		return
 	}
 
@@ -281,7 +270,7 @@ func (h *Handler) CreateWorkout(w http.ResponseWriter, r *http.Request, userID s
 func (h *Handler) ListWorkouts(w http.ResponseWriter, r *http.Request, userID string) {
 	plans, err := h.workoutUsecase.GetPlans(r.Context(), userID)
 	if err != nil {
-		response.JSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to list workouts"})
+		httperr.WriteError(w, r, h.logger, err)
 		return
 	}
 
@@ -291,11 +280,7 @@ func (h *Handler) ListWorkouts(w http.ResponseWriter, r *http.Request, userID st
 func (h *Handler) GetWorkoutByID(w http.ResponseWriter, r *http.Request, userID string, planID string) {
 	plan, err := h.workoutUsecase.GetPlanByID(r.Context(), userID, planID)
 	if err != nil {
-		if errors.Is(err, usecase.ErrWorkoutNotFound) {
-			response.JSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
-			return
-		}
-		response.JSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to get workout"})
+		httperr.WriteError(w, r, h.logger, err)
 		return
 	}
 
@@ -304,7 +289,7 @@ func (h *Handler) GetWorkoutByID(w http.ResponseWriter, r *http.Request, userID 
 
 func (h *Handler) DeleteWorkout(w http.ResponseWriter, r *http.Request, userID string, planID string) {
 	if err := h.workoutUsecase.DeletePlan(r.Context(), userID, planID); err != nil {
-		response.JSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to delete workout"})
+		httperr.WriteError(w, r, h.logger, err)
 		return
 	}
 
@@ -316,18 +301,18 @@ func (h *Handler) UpdateWorkout(w http.ResponseWriter, r *http.Request, userID s
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&req); err != nil {
-		response.JSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+		httperr.WriteError(w, r, h.logger, domain.ErrInvalidInput)
 		return
 	}
 
 	req.Name = strings.TrimSpace(req.Name)
 	req.Notes = strings.TrimSpace(req.Notes)
 	if req.Name == "" {
-		response.JSON(w, http.StatusBadRequest, map[string]string{"error": "name is required"})
+		httperr.WriteError(w, r, h.logger, domain.ErrInvalidInput)
 		return
 	}
 	if len(req.Exercises) < 1 {
-		response.JSON(w, http.StatusBadRequest, map[string]string{"error": "at least 1 exercise is required"})
+		httperr.WriteError(w, r, h.logger, domain.ErrInvalidInput)
 		return
 	}
 
@@ -335,15 +320,15 @@ func (h *Handler) UpdateWorkout(w http.ResponseWriter, r *http.Request, userID s
 	for _, in := range req.Exercises {
 		in.ExerciseID = strings.TrimSpace(in.ExerciseID)
 		if in.ExerciseID == "" {
-			response.JSON(w, http.StatusBadRequest, map[string]string{"error": "exercise_id is required"})
+			httperr.WriteError(w, r, h.logger, domain.ErrInvalidInput)
 			return
 		}
 		if in.Sets <= 0 {
-			response.JSON(w, http.StatusBadRequest, map[string]string{"error": "sets must be greater than 0"})
+			httperr.WriteError(w, r, h.logger, domain.ErrInvalidInput)
 			return
 		}
 		if in.Reps <= 0 {
-			response.JSON(w, http.StatusBadRequest, map[string]string{"error": "reps must be greater than 0"})
+			httperr.WriteError(w, r, h.logger, domain.ErrInvalidInput)
 			return
 		}
 
@@ -357,11 +342,7 @@ func (h *Handler) UpdateWorkout(w http.ResponseWriter, r *http.Request, userID s
 	}
 
 	if err := h.workoutUsecase.UpdatePlan(r.Context(), userID, planID, req.Name, req.Notes, exercises); err != nil {
-		if errors.Is(err, usecase.ErrWorkoutNotFound) {
-			response.JSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
-			return
-		}
-		response.JSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		httperr.WriteError(w, r, h.logger, err)
 		return
 	}
 
@@ -370,23 +351,23 @@ func (h *Handler) UpdateWorkout(w http.ResponseWriter, r *http.Request, userID s
 
 func (h *Handler) Exercises(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		response.JSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		httperr.WriteError(w, r, h.logger, domain.ErrInvalidInput)
 		return
 	}
 
-	exercises, err := h.exerciseUsecase.GetAll(r.Context())
+	items, err := h.exerciseUsecase.GetAll(r.Context())
 	if err != nil {
-		response.JSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to list exercises"})
+		httperr.WriteError(w, r, h.logger, err)
 		return
 	}
 
-	response.JSON(w, http.StatusOK, exercises)
+	response.JSON(w, http.StatusOK, items)
 }
 
 func (h *Handler) ScheduledWorkouts(w http.ResponseWriter, r *http.Request) {
 	userID, ok := GetUserIDFromContext(r.Context())
 	if !ok {
-		response.JSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		httperr.WriteError(w, r, h.logger, domain.ErrUnauthorized)
 		return
 	}
 
@@ -396,34 +377,26 @@ func (h *Handler) ScheduledWorkouts(w http.ResponseWriter, r *http.Request) {
 		dec := json.NewDecoder(r.Body)
 		dec.DisallowUnknownFields()
 		if err := dec.Decode(&req); err != nil {
-			response.JSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+			httperr.WriteError(w, r, h.logger, domain.ErrInvalidInput)
 			return
 		}
 
 		req.WorkoutPlanID = strings.TrimSpace(req.WorkoutPlanID)
 		req.ScheduledDate = strings.TrimSpace(req.ScheduledDate)
 		if req.WorkoutPlanID == "" || req.ScheduledDate == "" {
-			response.JSON(w, http.StatusBadRequest, map[string]string{"error": "workout_plan_id and scheduled_date are required"})
+			httperr.WriteError(w, r, h.logger, domain.ErrInvalidInput)
 			return
 		}
 
 		d, err := time.Parse("2006-01-02", req.ScheduledDate)
 		if err != nil {
-			response.JSON(w, http.StatusBadRequest, map[string]string{"error": "scheduled_date must be YYYY-MM-DD"})
+			httperr.WriteError(w, r, h.logger, domain.ErrInvalidInput)
 			return
 		}
 
 		err = h.scheduledWorkoutUsecase.ScheduleWorkout(r.Context(), userID, req.WorkoutPlanID, d)
 		if err != nil {
-			if errors.Is(err, usecase.ErrScheduleConflict) {
-				response.JSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
-				return
-			}
-			if errors.Is(err, usecase.ErrForbiddenPlan) {
-				response.JSON(w, http.StatusForbidden, map[string]string{"error": "forbidden"})
-				return
-			}
-			response.JSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			httperr.WriteError(w, r, h.logger, err)
 			return
 		}
 
@@ -435,13 +408,13 @@ func (h *Handler) ScheduledWorkouts(w http.ResponseWriter, r *http.Request) {
 		if dateParam != "" {
 			d, err := time.Parse("2006-01-02", dateParam)
 			if err != nil {
-				response.JSON(w, http.StatusBadRequest, map[string]string{"error": "date must be YYYY-MM-DD"})
+				httperr.WriteError(w, r, h.logger, domain.ErrInvalidInput)
 				return
 			}
 
 			items, err := h.scheduledWorkoutUsecase.GetUserScheduleByDate(r.Context(), userID, d)
 			if err != nil {
-				response.JSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to get schedules"})
+				httperr.WriteError(w, r, h.logger, err)
 				return
 			}
 			response.JSON(w, http.StatusOK, items)
@@ -450,7 +423,7 @@ func (h *Handler) ScheduledWorkouts(w http.ResponseWriter, r *http.Request) {
 
 		items, err := h.scheduledWorkoutUsecase.GetAllUserSchedules(r.Context(), userID)
 		if err != nil {
-			response.JSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to get schedules"})
+			httperr.WriteError(w, r, h.logger, err)
 			return
 		}
 		response.JSON(w, http.StatusOK, items)
@@ -464,28 +437,24 @@ func (h *Handler) ScheduledWorkouts(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) DeleteScheduledWorkout(w http.ResponseWriter, r *http.Request) {
 	userID, ok := GetUserIDFromContext(r.Context())
 	if !ok {
-		response.JSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		httperr.WriteError(w, r, h.logger, domain.ErrUnauthorized)
 		return
 	}
 
 	if r.Method != http.MethodDelete {
-		response.JSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		httperr.WriteError(w, r, h.logger, domain.ErrInvalidInput)
 		return
 	}
 
 	id := strings.TrimPrefix(r.URL.Path, "/api/workouts/schedule/")
 	id = strings.TrimSpace(id)
 	if id == "" || strings.Contains(id, "/") {
-		response.JSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+		httperr.WriteError(w, r, h.logger, domain.ErrNotFound)
 		return
 	}
 
 	if err := h.scheduledWorkoutUsecase.DeleteSchedule(r.Context(), id, userID); err != nil {
-		if errors.Is(err, usecase.ErrScheduleNotFound) {
-			response.JSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
-			return
-		}
-		response.JSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to delete schedule"})
+		httperr.WriteError(w, r, h.logger, err)
 		return
 	}
 

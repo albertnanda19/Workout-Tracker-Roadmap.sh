@@ -4,16 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"time"
 
 	"workout-tracker/internal/domain"
 	"workout-tracker/internal/repository"
-)
-
-var (
-	ErrScheduleConflict = errors.New("schedule already exists")
-	ErrScheduleNotFound = errors.New("schedule not found")
-	ErrForbiddenPlan    = errors.New("forbidden")
 )
 
 type ScheduledWorkoutUsecase struct {
@@ -27,17 +22,17 @@ func NewScheduledWorkoutUsecase(repo repository.ScheduledWorkoutRepository, db *
 
 func (u *ScheduledWorkoutUsecase) ScheduleWorkout(ctx context.Context, userID, workoutPlanID string, scheduledDate time.Time) error {
 	if userID == "" {
-		return errors.New("userID is required")
+		return fmt.Errorf("schedule workout: %w", domain.ErrInvalidInput)
 	}
 	if workoutPlanID == "" {
-		return errors.New("workoutPlanID is required")
+		return fmt.Errorf("schedule workout: %w", domain.ErrInvalidInput)
 	}
 
 	date := time.Date(scheduledDate.Year(), scheduledDate.Month(), scheduledDate.Day(), 0, 0, 0, 0, time.UTC)
 	today := time.Now().UTC()
 	today = time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, time.UTC)
 	if date.Before(today) {
-		return errors.New("scheduled date must be today or later")
+		return fmt.Errorf("schedule workout: %w", domain.ErrInvalidInput)
 	}
 
 	if u.db != nil {
@@ -47,20 +42,20 @@ func (u *ScheduledWorkoutUsecase) ScheduleWorkout(ctx context.Context, userID, w
 				SELECT 1 FROM workout_plans WHERE id = $1 AND user_id = $2
 			)
 		`, workoutPlanID, userID).Scan(&ok); err != nil {
-			return err
+			return fmt.Errorf("schedule workout: %w", err)
 		}
 		if !ok {
-			return ErrForbiddenPlan
+			return fmt.Errorf("schedule workout: %w", domain.ErrForbidden)
 		}
 	}
 
 	existing, err := u.repo.GetByUserAndDate(ctx, userID, date)
 	if err != nil {
-		return err
+		return fmt.Errorf("schedule workout: %w", err)
 	}
 	for _, sw := range existing {
 		if sw.WorkoutPlanID == workoutPlanID {
-			return ErrScheduleConflict
+			return fmt.Errorf("schedule workout: %w", domain.ErrConflict)
 		}
 	}
 
@@ -72,9 +67,9 @@ func (u *ScheduledWorkoutUsecase) ScheduleWorkout(ctx context.Context, userID, w
 
 	if err := u.repo.Create(ctx, sw); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return ErrScheduleConflict
+			return fmt.Errorf("schedule workout: %w", domain.ErrConflict)
 		}
-		return err
+		return fmt.Errorf("schedule workout: %w", err)
 	}
 
 	return nil
@@ -82,34 +77,42 @@ func (u *ScheduledWorkoutUsecase) ScheduleWorkout(ctx context.Context, userID, w
 
 func (u *ScheduledWorkoutUsecase) GetUserScheduleByDate(ctx context.Context, userID string, date time.Time) ([]domain.ScheduledWorkout, error) {
 	if userID == "" {
-		return nil, errors.New("userID is required")
+		return nil, fmt.Errorf("get schedules: %w", domain.ErrInvalidInput)
 	}
 
 	d := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC)
-	return u.repo.GetByUserAndDate(ctx, userID, d)
+	items, err := u.repo.GetByUserAndDate(ctx, userID, d)
+	if err != nil {
+		return nil, fmt.Errorf("get schedules: %w", err)
+	}
+	return items, nil
 }
 
 func (u *ScheduledWorkoutUsecase) GetAllUserSchedules(ctx context.Context, userID string) ([]domain.ScheduledWorkout, error) {
 	if userID == "" {
-		return nil, errors.New("userID is required")
+		return nil, fmt.Errorf("get schedules: %w", domain.ErrInvalidInput)
 	}
 
-	return u.repo.GetByUser(ctx, userID)
+	items, err := u.repo.GetByUser(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("get schedules: %w", err)
+	}
+	return items, nil
 }
 
 func (u *ScheduledWorkoutUsecase) DeleteSchedule(ctx context.Context, id, userID string) error {
 	if userID == "" {
-		return errors.New("userID is required")
+		return fmt.Errorf("delete schedule: %w", domain.ErrInvalidInput)
 	}
 	if id == "" {
-		return errors.New("id is required")
+		return fmt.Errorf("delete schedule: %w", domain.ErrInvalidInput)
 	}
 
 	if err := u.repo.Delete(ctx, id, userID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return ErrScheduleNotFound
+			return fmt.Errorf("delete schedule: %w", domain.ErrNotFound)
 		}
-		return err
+		return fmt.Errorf("delete schedule: %w", err)
 	}
 
 	return nil

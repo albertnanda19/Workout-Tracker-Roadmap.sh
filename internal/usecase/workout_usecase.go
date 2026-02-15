@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"strings"
 
 	"workout-tracker/internal/domain"
@@ -31,24 +32,24 @@ func (u *WorkoutUsecase) CreatePlan(
 	notes = strings.TrimSpace(notes)
 
 	if userID == "" {
-		return errors.New("userID is required")
+		return fmt.Errorf("create plan: %w", domain.ErrInvalidInput)
 	}
 	if name == "" {
-		return errors.New("name is required")
+		return fmt.Errorf("create plan: %w", domain.ErrInvalidInput)
 	}
 	if len(exercises) < 1 {
-		return errors.New("at least 1 exercise is required")
+		return fmt.Errorf("create plan: %w", domain.ErrInvalidInput)
 	}
 
 	for _, ex := range exercises {
 		if strings.TrimSpace(ex.ExerciseID) == "" {
-			return errors.New("exercise_id is required")
+			return fmt.Errorf("create plan: %w", domain.ErrInvalidInput)
 		}
 		if ex.Sets <= 0 {
-			return errors.New("sets must be greater than 0")
+			return fmt.Errorf("create plan: %w", domain.ErrInvalidInput)
 		}
 		if ex.Reps <= 0 {
-			return errors.New("reps must be greater than 0")
+			return fmt.Errorf("create plan: %w", domain.ErrInvalidInput)
 		}
 	}
 
@@ -59,7 +60,7 @@ func (u *WorkoutUsecase) CreatePlan(
 	}
 
 	if err := u.repo.CreatePlan(ctx, plan, exercises); err != nil {
-		return err
+		return fmt.Errorf("create plan: %w", err)
 	}
 
 	return nil
@@ -79,27 +80,27 @@ func (u *WorkoutUsecase) UpdatePlan(
 	notes = strings.TrimSpace(notes)
 
 	if userID == "" {
-		return errors.New("userID is required")
+		return fmt.Errorf("update plan: %w", domain.ErrInvalidInput)
 	}
 	if planID == "" {
-		return errors.New("planID is required")
+		return fmt.Errorf("update plan: %w", domain.ErrInvalidInput)
 	}
 	if name == "" {
-		return errors.New("name is required")
+		return fmt.Errorf("update plan: %w", domain.ErrInvalidInput)
 	}
 	if len(exercises) < 1 {
-		return errors.New("at least 1 exercise is required")
+		return fmt.Errorf("update plan: %w", domain.ErrInvalidInput)
 	}
 
 	for _, ex := range exercises {
 		if strings.TrimSpace(ex.ExerciseID) == "" {
-			return errors.New("exercise_id is required")
+			return fmt.Errorf("update plan: %w", domain.ErrInvalidInput)
 		}
 		if ex.Sets <= 0 {
-			return errors.New("sets must be greater than 0")
+			return fmt.Errorf("update plan: %w", domain.ErrInvalidInput)
 		}
 		if ex.Reps <= 0 {
-			return errors.New("reps must be greater than 0")
+			return fmt.Errorf("update plan: %w", domain.ErrInvalidInput)
 		}
 	}
 
@@ -112,9 +113,9 @@ func (u *WorkoutUsecase) UpdatePlan(
 
 	if err := u.repo.UpdatePlan(ctx, plan, exercises); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return ErrWorkoutNotFound
+			return fmt.Errorf("update plan: %w", domain.ErrNotFound)
 		}
-		return err
+		return fmt.Errorf("update plan: %w", err)
 	}
 
 	return nil
@@ -123,10 +124,14 @@ func (u *WorkoutUsecase) UpdatePlan(
 func (u *WorkoutUsecase) GetPlans(ctx context.Context, userID string) ([]domain.WorkoutPlan, error) {
 	userID = strings.TrimSpace(userID)
 	if userID == "" {
-		return nil, errors.New("userID is required")
+		return nil, fmt.Errorf("get plans: %w", domain.ErrInvalidInput)
 	}
 
-	return u.repo.GetPlansByUser(ctx, userID)
+	plans, err := u.repo.GetPlansByUser(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("get plans: %w", err)
+	}
+	return plans, nil
 }
 
 func (u *WorkoutUsecase) GetPlanByID(ctx context.Context, userID string, planID string) (*domain.WorkoutPlan, error) {
@@ -134,18 +139,18 @@ func (u *WorkoutUsecase) GetPlanByID(ctx context.Context, userID string, planID 
 	planID = strings.TrimSpace(planID)
 
 	if userID == "" {
-		return nil, errors.New("userID is required")
+		return nil, fmt.Errorf("get plan: %w", domain.ErrInvalidInput)
 	}
 	if planID == "" {
-		return nil, errors.New("planID is required")
+		return nil, fmt.Errorf("get plan: %w", domain.ErrInvalidInput)
 	}
 
 	plan, err := u.repo.GetPlanByID(ctx, planID, userID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get plan: %w", err)
 	}
 	if plan == nil {
-		return nil, ErrWorkoutNotFound
+		return nil, fmt.Errorf("get plan: %w", domain.ErrNotFound)
 	}
 
 	return plan, nil
@@ -156,14 +161,14 @@ func (u *WorkoutUsecase) DeletePlan(ctx context.Context, userID string, planID s
 	planID = strings.TrimSpace(planID)
 
 	if userID == "" {
-		return errors.New("userID is required")
+		return fmt.Errorf("delete plan: %w", domain.ErrInvalidInput)
 	}
 	if planID == "" {
-		return errors.New("planID is required")
+		return fmt.Errorf("delete plan: %w", domain.ErrInvalidInput)
 	}
 
 	if err := u.repo.DeletePlan(ctx, planID, userID); err != nil {
-		return err
+		return fmt.Errorf("delete plan: %w", err)
 	}
 
 	return nil

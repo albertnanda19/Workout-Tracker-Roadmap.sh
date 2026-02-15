@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"strings"
 
 	"golang.org/x/crypto/bcrypt"
@@ -26,26 +27,26 @@ func (u *UserUsecase) Register(ctx context.Context, name, email, password string
 	email = strings.TrimSpace(email)
 
 	if name == "" {
-		return nil, errors.New("name is required")
+		return nil, fmt.Errorf("register: %w", domain.ErrInvalidInput)
 	}
 	if email == "" {
-		return nil, errors.New("email is required")
+		return nil, fmt.Errorf("register: %w", domain.ErrInvalidInput)
 	}
 	if len(password) < 6 {
-		return nil, errors.New("password must be at least 6 characters")
+		return nil, fmt.Errorf("register: %w", domain.ErrInvalidInput)
 	}
 
 	_, err := u.repo.GetByEmail(ctx, email)
 	if err == nil {
-		return nil, domain.ErrEmailAlreadyExists
+		return nil, fmt.Errorf("register: %w", domain.ErrConflict)
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
-		return nil, err
+		return nil, fmt.Errorf("register: %w", err)
 	}
 
 	h, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("register: %w", err)
 	}
 
 	user := &domain.User{
@@ -55,7 +56,7 @@ func (u *UserUsecase) Register(ctx context.Context, name, email, password string
 	}
 
 	if err := u.repo.Create(ctx, user); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("register: %w", err)
 	}
 
 	user.PasswordHash = ""
@@ -66,27 +67,27 @@ func (u *UserUsecase) Login(ctx context.Context, email, password string) (*domai
 	email = strings.TrimSpace(email)
 
 	if email == "" {
-		return nil, errors.New("email is required")
+		return nil, fmt.Errorf("login: %w", domain.ErrInvalidInput)
 	}
 	if password == "" {
-		return nil, errors.New("password is required")
+		return nil, fmt.Errorf("login: %w", domain.ErrInvalidInput)
 	}
 
 	user, err := u.repo.GetByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, domain.ErrInvalidCredentials
+			return nil, fmt.Errorf("login: %w", domain.ErrUnauthorized)
 		}
-		return nil, err
+		return nil, fmt.Errorf("login: %w", err)
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
-		return nil, domain.ErrInvalidCredentials
+		return nil, fmt.Errorf("login: %w", domain.ErrUnauthorized)
 	}
 
 	token, exp, err := u.jwt.Generate(user.ID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("login: %w", err)
 	}
 
 	return &domain.AuthToken{AccessToken: token, ExpiresAt: exp}, nil
@@ -95,12 +96,15 @@ func (u *UserUsecase) Login(ctx context.Context, email, password string) (*domai
 func (u *UserUsecase) GetByID(ctx context.Context, id string) (*domain.User, error) {
 	id = strings.TrimSpace(id)
 	if id == "" {
-		return nil, errors.New("id is required")
+		return nil, fmt.Errorf("get user: %w", domain.ErrInvalidInput)
 	}
 
 	user, err := u.repo.GetByID(ctx, id)
 	if err != nil {
-		return nil, err
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("get user: %w", domain.ErrNotFound)
+		}
+		return nil, fmt.Errorf("get user: %w", err)
 	}
 
 	user.PasswordHash = ""

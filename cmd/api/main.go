@@ -10,11 +10,13 @@ import (
 	"time"
 
 	httpdelivery "workout-tracker/internal/delivery/http"
+	"workout-tracker/internal/delivery/http/middleware"
 	"workout-tracker/internal/infrastructure"
 	"workout-tracker/internal/infrastructure/auth"
 	"workout-tracker/internal/infrastructure/migration"
 	"workout-tracker/internal/infrastructure/repository"
 	"workout-tracker/internal/infrastructure/seeder"
+	"workout-tracker/internal/platform/logger"
 	"workout-tracker/internal/usecase"
 )
 
@@ -23,6 +25,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	appLogger := logger.NewLogger()
 
 	db, err := infrastructure.NewPostgresDB(&cfg)
 	if err != nil {
@@ -51,13 +55,14 @@ func main() {
 	workoutUC := usecase.NewWorkoutUsecase(workoutRepo)
 	exerciseUC := usecase.NewExerciseUsecase(exerciseRepo)
 	scheduledUC := usecase.NewScheduledWorkoutUsecase(scheduledRepo, db)
-	handler := httpdelivery.NewHandler(userUC, workoutUC, exerciseUC, scheduledUC)
+	handler := httpdelivery.NewHandler(appLogger, userUC, workoutUC, exerciseUC, scheduledUC)
 	router := httpdelivery.NewRouter(handler, jwtSvc)
+	h := middleware.RequestIDMiddleware(middleware.LoggingMiddleware(appLogger)(middleware.RecoveryMiddleware(appLogger)(router)))
 	_, _, _ = exerciseRepo, workoutUC, router
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           router,
+		Handler:           h,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

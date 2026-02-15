@@ -2,8 +2,19 @@ package domain
 
 import (
 	"context"
+	"errors"
 	"time"
 )
+
+var (
+	ErrEmailAlreadyExists = errors.New("email already exists")
+	ErrInvalidCredentials = errors.New("invalid credentials")
+)
+
+type AuthToken struct {
+	AccessToken string
+	ExpiresAt   time.Time
+}
 
 type User struct {
 	ID           string

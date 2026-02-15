@@ -11,9 +11,11 @@ import (
 
 	httpdelivery "workout-tracker/internal/delivery/http"
 	"workout-tracker/internal/infrastructure"
+	"workout-tracker/internal/infrastructure/auth"
 	"workout-tracker/internal/infrastructure/migration"
 	"workout-tracker/internal/infrastructure/repository"
 	"workout-tracker/internal/infrastructure/seeder"
+	"workout-tracker/internal/usecase"
 )
 
 func main() {
@@ -42,7 +44,10 @@ func main() {
 	userRepo := repository.NewPostgresUserRepository(db)
 	workoutRepo := repository.NewPostgresWorkoutRepository(db)
 	exerciseRepo := repository.NewPostgresExerciseRepository(db)
-	_, _, _ = userRepo, workoutRepo, exerciseRepo
+
+	jwtSvc := auth.NewJWTService(cfg.JWTSecret)
+	userUC := usecase.NewUserUsecase(userRepo, jwtSvc)
+	_, _, _, _ = userRepo, workoutRepo, exerciseRepo, userUC
 
 	h := httpdelivery.NewRouter()
 
